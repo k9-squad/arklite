@@ -1,0 +1,618 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>方舟Lite · 极简塔防</title>
+<style>
+  :root{
+    --bg:#16161c; --panel:#1f1f2a; --panel2:#262633; --line:#33334a;
+    --txt:#e8e8f0; --dim:#9a9ab0;
+    --guard:#e8913c; --def:#3c7be8; --sniper:#3ce86a; --caster:#b04ce8;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html,body{margin:0;padding:0;height:100%;background:var(--bg);color:var(--txt);
+    font-family:-apple-system,"PingFang SC","Microsoft YaHei",system-ui,sans-serif;
+    overflow:hidden; touch-action:manipulation;}
+  #app{display:flex;flex-direction:column;height:100%;max-width:520px;margin:0 auto;}
+
+  /* 顶部状态 */
+  #hud{display:flex;align-items:center;gap:6px;padding:8px 10px;background:var(--panel);
+    border-bottom:1px solid var(--line);font-size:14px;}
+  .stat{display:flex;align-items:center;gap:4px;font-weight:600;}
+  .stat .lbl{color:var(--dim);font-weight:400;font-size:12px;}
+  #cost{color:#ffd54a;}
+  #life{color:#ff6b6b;}
+  #wave{color:#7fd1ff;}
+  .spacer{flex:1;}
+  .btn{background:var(--panel2);border:1px solid var(--line);color:var(--txt);
+    border-radius:8px;padding:6px 10px;font-size:13px;font-weight:600;cursor:pointer;}
+  .btn:active{transform:scale(.95);}
+  .btn.on{background:#3c7be8;border-color:#5b94ff;}
+
+  /* 画布 */
+  #stage{flex:1;display:flex;align-items:center;justify-content:center;
+    position:relative;background:var(--bg);overflow:hidden;padding:6px;}
+  canvas{background:#101018;border-radius:10px;touch-action:none;display:block;}
+
+  /* 撤退提示 */
+  #selBar{position:absolute;top:8px;left:50%;transform:translateX(-50%);
+    display:none;gap:8px;align-items:center;background:rgba(0,0,0,.7);
+    padding:6px 10px;border-radius:10px;font-size:13px;border:1px solid var(--line);}
+  #selBar .btn{padding:4px 10px;}
+
+  /* 底部部署条 */
+  #dock{display:flex;gap:6px;padding:8px;background:var(--panel);border-top:1px solid var(--line);}
+  .op{flex:1;background:var(--panel2);border:2px solid var(--line);border-radius:10px;
+    padding:8px 4px;text-align:center;cursor:pointer;position:relative;user-select:none;}
+  .op .nm{font-size:14px;font-weight:700;}
+  .op .sub{font-size:10px;color:var(--dim);line-height:1.25;margin-top:2px;}
+  .op .cc{font-size:13px;font-weight:700;margin-top:3px;color:#ffd54a;}
+  .op[data-k=guard]{border-color:var(--guard);}
+  .op[data-k=def]{border-color:var(--def);}
+  .op[data-k=sniper]{border-color:var(--sniper);}
+  .op[data-k=caster]{border-color:var(--caster);}
+  .op.sel{background:#3a3a55;box-shadow:0 0 0 2px #fff inset;}
+  .op.dis{opacity:.4;filter:grayscale(.6);}
+
+  /* 覆盖层 */
+  #overlay{position:absolute;inset:0;display:flex;flex-direction:column;
+    align-items:center;justify-content:center;gap:14px;background:rgba(10,10,16,.92);
+    text-align:center;padding:24px;z-index:10;}
+  #overlay.hide{display:none;}
+  #overlay h1{margin:0;font-size:28px;}
+  #overlay p{margin:0;color:var(--dim);font-size:14px;line-height:1.6;max-width:340px;}
+  #overlay .big{font-size:16px;padding:12px 28px;}
+  .tip{font-size:12px;color:var(--dim);text-align:left;max-width:340px;}
+  .tip b{color:var(--txt);}
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="hud">
+    <div class="stat"><span class="lbl">费用</span><span id="cost">0</span></div>
+    <div class="stat"><span class="lbl">生命</span><span id="life">3</span></div>
+    <div class="stat"><span class="lbl">波次</span><span id="wave">0/0</span></div>
+    <div class="spacer"></div>
+    <button class="btn" id="speedBtn">1x</button>
+    <button class="btn" id="pauseBtn">暂停</button>
+  </div>
+
+  <div id="stage">
+    <canvas id="cv"></canvas>
+    <div id="selBar">
+      <span id="selTxt"></span>
+      <button class="btn" id="retreatBtn">撤退</button>
+    </div>
+    <div id="overlay">
+      <h1>方舟Lite</h1>
+      <p>极简版明日方舟塔防。在<b style="color:#46506e">高台</b>上部署远程干员，在<b style="color:#3a3a4a">地面</b>上部署近战干员拦截敌人。别让敌人冲进<b style="color:#ff6b6b">蓝门(目标点)</b>！</p>
+      <div class="tip">
+        · 点击下方干员卡 → 点击高亮格子部署<br>
+        · <b style="color:var(--guard)">近卫</b>：阻挡1人 · 范围1×2 · 高攻<br>
+        · <b style="color:var(--def)">重装</b>：阻挡3人 · 仅自身格 · 高血<br>
+        · <b style="color:var(--sniper)">射手</b>：远程单体 · 高攻速 · 脆皮<br>
+        · <b style="color:var(--caster)">群法</b>：范围群攻 · 慢攻速 · 脆皮<br>
+        · 点击已部署干员可查看范围并撤退
+      </div>
+      <button class="btn big" id="startBtn">开始游戏</button>
+    </div>
+  </div>
+
+  <div id="dock"></div>
+</div>
+
+<script>
+"use strict";
+/* ============================================================
+   方舟Lite — 极简塔防  (single-file canvas game)
+   注：原需求中部分数值含糊（如射手"4/15"、群法"23"），
+   这里采用合理诠释：射手=远程直线4格+近端展宽；群法=前方3×2区域群攻。
+   ============================================================ */
+
+// ---------- 地图 ----------
+// S=出生点  T=目标点  r=地面(近战可部署/敌人行走)  h=高台(远程可部署)  x=空地
+const MAP = [
+  "hShxx",
+  "hrhxx",
+  "hrrrh",
+  "xhhrh",
+  "hrrrh",
+  "hrhxx",
+  "hrrrh",
+  "xhhTh",
+];
+const ROWS = MAP.length, COLS = MAP[0].length;
+// 敌人行进路径（按顺序）
+const PATH = [
+  [0,1],[1,1],[2,1],[2,2],[2,3],[3,3],[4,3],[4,2],[4,1],[5,1],[6,1],[6,2],[6,3],[7,3]
+].map(([r,c])=>({r,c}));
+const pathIndexAt = {}; // "r,c" -> index in PATH
+PATH.forEach((p,i)=>{ pathIndexAt[p.r+","+p.c]=i; });
+
+// ---------- 干员定义 ----------
+// offsets: [forward, side] 前方/侧向（朝向自动计算）
+const RANGES = {
+  guard:  [[0,0],[1,0]],                                   // 1×2 含自身
+  def:    [[0,0]],                                         // 1×1 仅自身
+  sniper: [[1,0],[2,0],[3,0],[4,0],[1,-1],[1,1],[2,-1],[2,1]], // 远程直线4 + 近端展宽
+  caster: [[1,-1],[1,0],[1,1],[2,-1],[2,0],[2,1]],         // 前方3×2 群攻
+};
+const OPS = {
+  guard:  {name:"近卫", cn:"卫", color:"#e8913c", melee:true,  block:1, cost:17, atk:60,  interval:0.9, hp:600,  aoe:false, range:RANGES.guard,  desc:"阻挡1 范围1×2"},
+  def:    {name:"重装", cn:"重", color:"#3c7be8", melee:true,  block:3, cost:15, atk:28,  interval:1.0, hp:1400, aoe:false, range:RANGES.def,    desc:"阻挡3 仅自身格"},
+  sniper: {name:"射手", cn:"射", color:"#3ce86a", melee:false, block:0, cost:16, atk:45,  interval:0.45,hp:250,  aoe:false, range:RANGES.sniper, desc:"远程 高攻速"},
+  caster: {name:"群法", cn:"术", color:"#b04ce8", melee:false, block:0, cost:30, atk:70,  interval:1.5, hp:280,  aoe:true,  range:RANGES.caster, desc:"范围群攻"},
+};
+const OP_ORDER = ["guard","def","sniper","caster"];
+
+// ---------- 敌人定义 ----------
+const ENEMIES = {
+  normal: {color:"#e05050", hp:120, speed:0.85, atk:22, atkInt:1.0, rad:0.30},
+  fast:   {color:"#e6d24a", hp:65,  speed:1.7,  atk:13, atkInt:1.0, rad:0.24},
+  tank:   {color:"#8a3030", hp:420, speed:0.5,  atk:45, atkInt:1.2, rad:0.40},
+};
+
+// ---------- 敌人波次（绝对生成时间，秒）----------
+function buildSpawns(){
+  const s=[]; let t=2;
+  const add=(time,type)=>s.push({time:+time.toFixed(2),type});
+  for(let i=0;i<5;i++){ add(t,"normal"); t+=1.7; }       // 波1
+  t+=4;
+  for(let i=0;i<6;i++){ add(t,"fast"); t+=1.1; }          // 波2
+  t+=4;
+  for(let i=0;i<3;i++){ add(t,"tank"); add(t+0.6,"normal"); t+=3.2; } // 波3
+  t+=3;
+  for(let i=0;i<8;i++){ add(t, i%2?"fast":"normal"); t+=0.85; } // 终波
+  add(t+1.5,"tank"); add(t+1.9,"tank");
+  return s.sort((a,b)=>a.time-b.time);
+}
+
+// ---------- 游戏状态 ----------
+const State = {
+  running:false, over:false, won:false, started:false,
+  time:0, speed:1, costF:20, life:3,
+  spawns:[], spawnIdx:0,
+  enemies:[], ops:[], effects:[],
+  opGrid:{},          // "r,c" -> op
+  opPathIdx:[],       // index along PATH -> op (only melee)
+  placing:null,       // op key being placed
+  selected:null,      // selected deployed op
+};
+
+// ---------- Canvas / 尺寸 ----------
+const cv = document.getElementById("cv");
+const ctx = cv.getContext("2d");
+let CELL = 56, OX = 0, OY = 0;
+
+function resize(){
+  const stage = document.getElementById("stage");
+  const aw = stage.clientWidth - 12, ah = stage.clientHeight - 12;
+  CELL = Math.floor(Math.min(aw / COLS, ah / ROWS));
+  cv.width = CELL * COLS; cv.height = CELL * ROWS;
+  cv.style.width = cv.width + "px"; cv.style.height = cv.height + "px";
+}
+window.addEventListener("resize", resize);
+
+// ---------- 工具 ----------
+const key=(r,c)=>r+","+c;
+const cellType=(r,c)=>(r<0||c<0||r>=ROWS||c>=COLS)?"x":MAP[r][c];
+const sign=x=>x>0?1:x<0?-1:0;
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+
+// 敌人当前所在格（用于范围判定）
+function enemyCell(e){
+  const i = clamp(Math.round(e.pathPos), 0, PATH.length-1);
+  return PATH[i];
+}
+// 敌人像素坐标（路径插值）
+function enemyXY(e){
+  const i = Math.floor(e.pathPos), f = e.pathPos - i;
+  const a = PATH[clamp(i,0,PATH.length-1)];
+  const b = PATH[clamp(i+1,0,PATH.length-1)];
+  const r = a.r + (b.r-a.r)*f, c = a.c + (b.c-a.c)*f;
+  return { x: OX + (c+0.5)*CELL, y: OY + (r+0.5)*CELL };
+}
+
+// 计算干员朝向 {dr,dc}
+function computeFacing(op){
+  if(op.melee){
+    const pi = op.pathIndex;
+    const ref = pi>0 ? PATH[pi-1] : PATH[pi+1]; // 朝向敌人来向
+    const ddr = ref.r-op.r, ddc = ref.c-op.c;
+    return Math.abs(ddr)>=Math.abs(ddc) ? {dr:sign(ddr),dc:0} : {dr:0,dc:sign(ddc)};
+  } else {
+    // 朝向最近路径格
+    let best=null, bd=1e9;
+    for(const p of PATH){
+      const d=(p.r-op.r)**2+(p.c-op.c)**2;
+      if(d<bd){bd=d;best=p;}
+    }
+    const ddr=best.r-op.r, ddc=best.c-op.c;
+    if(ddr===0&&ddc===0) return {dr:-1,dc:0};
+    return Math.abs(ddr)>=Math.abs(ddc) ? {dr:sign(ddr),dc:0} : {dr:0,dc:sign(ddc)};
+  }
+}
+// 由朝向+偏移列表得到实际覆盖格
+function rangeCells(op){
+  const f = op.facing;
+  // forwardVec=f ; sideVec=(f.dc, -f.dr)
+  const sv = {dr:f.dc, dc:-f.dr};
+  const cells=[];
+  for(const [fwd,side] of op.def.range){
+    cells.push({ r: op.r + fwd*f.dr + side*sv.dr, c: op.c + fwd*f.dc + side*sv.dc });
+  }
+  return cells;
+}
+
+// ---------- 部署 ----------
+function canPlace(kind, r, c){
+  const t = cellType(r,c);
+  const def = OPS[kind];
+  if(State.opGrid[key(r,c)]) return false;
+  if(def.melee) return t==="r";
+  return t==="h";
+}
+function placeOp(kind, r, c){
+  const def = OPS[kind];
+  const op = { kind, def, r, c, hp:def.hp, maxhp:def.hp, cd:0, block:def.melee?def.block:0,
+               melee:def.melee, _blk:[], pathIndex: def.melee?pathIndexAt[key(r,c)]:-1 };
+  op.facing = computeFacing(op);
+  op.cells = rangeCells(op);
+  State.ops.push(op);
+  State.opGrid[key(r,c)] = op;
+  if(def.melee && op.pathIndex>=0) State.opPathIdx[op.pathIndex]=op;
+  State.costF -= def.cost;
+}
+function removeOp(op){
+  const i = State.ops.indexOf(op); if(i>=0) State.ops.splice(i,1);
+  delete State.opGrid[key(op.r,op.c)];
+  if(op.pathIndex>=0 && State.opPathIdx[op.pathIndex]===op) State.opPathIdx[op.pathIndex]=null;
+}
+
+// ---------- 模拟步进 ----------
+function step(dt){
+  State.time += dt;
+  State.costF = Math.min(99, State.costF + dt); // 每秒+1
+
+  // 生成敌人
+  while(State.spawnIdx < State.spawns.length && State.spawns[State.spawnIdx].time <= State.time){
+    const sp = State.spawns[State.spawnIdx++];
+    const ed = ENEMIES[sp.type];
+    State.enemies.push({ type:sp.type, def:ed, hp:ed.hp, maxhp:ed.hp,
+      speed:ed.speed, pathPos:0, blockedBy:null, atkCd:0, dead:false });
+  }
+
+  // 阻挡 + 移动（前排优先占用阻挡位）
+  State.ops.forEach(o=>o._blk=[]);
+  const order = [...State.enemies].sort((a,b)=>b.pathPos-a.pathPos);
+  for(const e of order){
+    if(e.dead) continue;
+    e.blockedBy=null;
+    const newPos = e.pathPos + e.speed*dt;
+    let blocked=false;
+    const startTile = Math.ceil(e.pathPos - 1e-6);
+    const endTile = Math.min(Math.floor(newPos + 1e-6), PATH.length-1);
+    for(let ti=startTile; ti<=endTile; ti++){
+      const op = State.opPathIdx[ti];
+      if(op && op.block>0 && op._blk.length < op.block){
+        e.pathPos = ti; op._blk.push(e); e.blockedBy=op; blocked=true; break;
+      }
+    }
+    if(!blocked) e.pathPos = Math.min(newPos, PATH.length-1);
+  }
+
+  // 抵达目标点
+  for(const e of State.enemies){
+    if(!e.dead && e.pathPos >= PATH.length-1-1e-6){
+      e.dead=true; State.life--;
+      if(State.life<=0){ gameOver(false); }
+    }
+  }
+
+  // 被阻挡敌人攻击干员
+  for(const e of State.enemies){
+    if(e.dead || !e.blockedBy) continue;
+    e.atkCd -= dt;
+    if(e.atkCd<=0){
+      e.atkCd = e.def.atkInt;
+      const op = e.blockedBy;
+      op.hp -= e.def.atk;
+      if(op.hp<=0){
+        if(State.selected===op) hideSel();
+        removeOp(op);
+      }
+    }
+  }
+
+  // 干员攻击
+  for(const op of State.ops){
+    op.cd -= dt;
+    if(op.cd>0) continue;
+    const rangeSet = new Set(op.cells.map(c=>key(c.r,c.c)));
+    const inRange = State.enemies.filter(e=>!e.dead && rangeSet.has(key(enemyCell(e).r, enemyCell(e).c)));
+    if(inRange.length===0) continue;
+    op.cd = op.def.interval;
+    const from = { x:OX+(op.c+0.5)*CELL, y:OY+(op.r+0.5)*CELL };
+    if(op.def.aoe){
+      for(const e of inRange){ damage(e, op.def.atk); }
+      // AoE 视觉：覆盖中心闪光
+      let cx=0,cy=0; op.cells.forEach(c=>{cx+=OX+(c.c+0.5)*CELL; cy+=OY+(c.r+0.5)*CELL;});
+      State.effects.push({type:"aoe", x:cx/op.cells.length, y:cy/op.cells.length, life:0.25, color:op.def.color});
+    } else {
+      // 优先攻击自身阻挡的敌人，否则攻击最接近目标点者
+      let cand = inRange.filter(e=>e.blockedBy===op);
+      if(cand.length===0) cand = inRange;
+      let target = cand[0];
+      for(const e of cand) if(e.pathPos>target.pathPos) target=e;
+      damage(target, op.def.atk);
+      const to = enemyXY(target);
+      State.effects.push({type:"shot", x:from.x, y:from.y, tx:to.x, ty:to.y, life:0.12, color:op.def.color});
+    }
+  }
+
+  // 清理死亡敌人
+  State.enemies = State.enemies.filter(e=>!e.dead);
+
+  // 特效
+  for(const ef of State.effects) ef.life -= dt;
+  State.effects = State.effects.filter(ef=>ef.life>0);
+
+  // 胜利判定
+  if(!State.over && State.spawnIdx>=State.spawns.length && State.enemies.length===0 && State.life>0){
+    gameOver(true);
+  }
+}
+function damage(e, amt){ e.hp -= amt; if(e.hp<=0) e.dead=true; }
+
+// ---------- 渲染 ----------
+function draw(){
+  ctx.clearRect(0,0,cv.width,cv.height);
+  // 地图格
+  for(let r=0;r<ROWS;r++) for(let c=0;c<COLS;c++){
+    const t = MAP[r][c];
+    if(t==="x") continue;
+    const x=OX+c*CELL, y=OY+r*CELL;
+    let fill="#2a2a38";
+    if(t==="r"||t==="S"||t==="T") fill="#3a3a4a";   // 地面
+    else if(t==="h") fill="#454f70";                // 高台
+    ctx.fillStyle=fill;
+    roundRect(x+2,y+2,CELL-4,CELL-4,6); ctx.fill();
+    if(t==="h"){ // 高台标记
+      ctx.fillStyle="rgba(255,255,255,.10)";
+      roundRect(x+2,y+2,CELL-4,5,3); ctx.fill();
+    }
+  }
+  // 路径连线
+  ctx.strokeStyle="rgba(255,255,255,.12)"; ctx.lineWidth=Math.max(3,CELL*0.10);
+  ctx.beginPath();
+  PATH.forEach((p,i)=>{ const x=OX+(p.c+0.5)*CELL,y=OY+(p.r+0.5)*CELL; i?ctx.lineTo(x,y):ctx.moveTo(x,y); });
+  ctx.stroke();
+
+  // 出生/目标
+  const S=PATH[0], T=PATH[PATH.length-1];
+  drawMarker(S.r,S.c,"#4caf50","出");
+  drawMarker(T.r,T.c,"#5b94ff","门");
+
+  // 范围高亮
+  if(State.placing){
+    for(let r=0;r<ROWS;r++) for(let c=0;c<COLS;c++){
+      if(canPlace(State.placing,r,c)){
+        ctx.fillStyle="rgba(120,255,150,.18)";
+        roundRect(OX+c*CELL+2,OY+r*CELL+2,CELL-4,CELL-4,6); ctx.fill();
+        ctx.strokeStyle="rgba(120,255,150,.5)"; ctx.lineWidth=2;
+        roundRect(OX+c*CELL+2,OY+r*CELL+2,CELL-4,CELL-4,6); ctx.stroke();
+      }
+    }
+  }
+  if(State.selected){
+    for(const c of State.selected.cells){
+      if(c.r<0||c.c<0||c.r>=ROWS||c.c>=COLS) continue;
+      ctx.fillStyle="rgba(255,235,120,.22)";
+      roundRect(OX+c.c*CELL+3,OY+c.r*CELL+3,CELL-6,CELL-6,6); ctx.fill();
+    }
+  }
+
+  // 干员
+  for(const op of State.ops) drawOp(op);
+  // 敌人
+  for(const e of State.enemies) drawEnemy(e);
+  // 特效
+  for(const ef of State.effects) drawEffect(ef);
+}
+
+function drawMarker(r,c,color,txt){
+  const x=OX+(c+0.5)*CELL, y=OY+(r+0.5)*CELL;
+  ctx.fillStyle=color;
+  ctx.beginPath(); ctx.arc(x,y,CELL*0.22,0,7); ctx.fill();
+  ctx.fillStyle="#fff"; ctx.font=`bold ${CELL*0.26}px sans-serif`;
+  ctx.textAlign="center"; ctx.textBaseline="middle"; ctx.fillText(txt,x,y);
+}
+
+function drawOp(op){
+  const x=OX+(op.c+0.5)*CELL, y=OY+(op.r+0.5)*CELL, s=CELL*0.34;
+  ctx.fillStyle=op.def.color;
+  ctx.strokeStyle="#fff"; ctx.lineWidth=2;
+  if(op.kind==="sniper"){ // 三角
+    ctx.beginPath(); ctx.moveTo(x,y-s); ctx.lineTo(x+s,y+s); ctx.lineTo(x-s,y+s); ctx.closePath();
+    ctx.fill(); ctx.stroke();
+  } else if(op.kind==="caster"){ // 菱形
+    ctx.beginPath(); ctx.moveTo(x,y-s); ctx.lineTo(x+s,y); ctx.lineTo(x,y+s); ctx.lineTo(x-s,y); ctx.closePath();
+    ctx.fill(); ctx.stroke();
+  } else { // 方块
+    roundRect(x-s,y-s,s*2,s*2,5); ctx.fill(); ctx.stroke();
+  }
+  // 朝向小箭头
+  const f=op.facing;
+  ctx.fillStyle="rgba(255,255,255,.85)";
+  ctx.beginPath();
+  ctx.arc(x+f.dc*s*0.95, y+f.dr*s*0.95, CELL*0.05, 0, 7); ctx.fill();
+  // 文字
+  ctx.fillStyle="#1a1a1a"; ctx.font=`bold ${CELL*0.30}px sans-serif`;
+  ctx.textAlign="center"; ctx.textBaseline="middle"; ctx.fillText(op.def.cn,x,y+1);
+  // 血条（近战显示）
+  if(op.melee){
+    const w=CELL*0.7, bx=x-w/2, by=y-s-7;
+    ctx.fillStyle="#000"; ctx.fillRect(bx,by,w,4);
+    ctx.fillStyle="#4caf50"; ctx.fillRect(bx,by,w*clamp(op.hp/op.maxhp,0,1),4);
+  }
+}
+
+function drawEnemy(e){
+  const p = enemyXY(e), rad = CELL*e.def.rad;
+  ctx.fillStyle=e.def.color; ctx.strokeStyle="rgba(0,0,0,.5)"; ctx.lineWidth=2;
+  ctx.beginPath(); ctx.arc(p.x,p.y,rad,0,7); ctx.fill(); ctx.stroke();
+  if(e.blockedBy){ ctx.strokeStyle="#fff"; ctx.lineWidth=2;
+    ctx.beginPath(); ctx.arc(p.x,p.y,rad+2,0,7); ctx.stroke(); }
+  // 血条
+  const w=rad*2.2, bx=p.x-w/2, by=p.y-rad-7;
+  ctx.fillStyle="#000"; ctx.fillRect(bx,by,w,4);
+  ctx.fillStyle="#ff5252"; ctx.fillRect(bx,by,w*clamp(e.hp/e.maxhp,0,1),4);
+}
+
+function drawEffect(ef){
+  const a = clamp(ef.life/0.12,0,1);
+  if(ef.type==="shot"){
+    ctx.strokeStyle=ef.color; ctx.globalAlpha=a; ctx.lineWidth=3;
+    ctx.beginPath(); ctx.moveTo(ef.x,ef.y); ctx.lineTo(ef.tx,ef.ty); ctx.stroke();
+    ctx.globalAlpha=1;
+  } else if(ef.type==="aoe"){
+    ctx.fillStyle=ef.color; ctx.globalAlpha=clamp(ef.life/0.25,0,1)*0.5;
+    ctx.beginPath(); ctx.arc(ef.x,ef.y,CELL*0.9*(1.2-ef.life/0.25),0,7); ctx.fill();
+    ctx.globalAlpha=1;
+  }
+}
+
+function roundRect(x,y,w,h,r){
+  ctx.beginPath();
+  ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r);
+  ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath();
+}
+
+// ---------- HUD ----------
+function updateHUD(){
+  document.getElementById("cost").textContent = Math.floor(State.costF);
+  document.getElementById("life").textContent = Math.max(0,State.life);
+  document.getElementById("wave").textContent = State.spawnIdx+"/"+State.spawns.length;
+  // 干员卡可用性
+  document.querySelectorAll(".op").forEach(el=>{
+    const k=el.dataset.k;
+    el.classList.toggle("dis", State.costF < OPS[k].cost);
+    el.classList.toggle("sel", State.placing===k);
+  });
+}
+
+function buildDock(){
+  const dock=document.getElementById("dock"); dock.innerHTML="";
+  for(const k of OP_ORDER){
+    const o=OPS[k];
+    const el=document.createElement("div");
+    el.className="op"; el.dataset.k=k;
+    el.innerHTML=`<div class="nm" style="color:${o.color}">${o.name}</div>
+      <div class="sub">${o.desc}</div><div class="cc">${o.cost}</div>`;
+    el.addEventListener("click",()=>selectPlacing(k));
+    dock.appendChild(el);
+  }
+}
+
+function selectPlacing(k){
+  hideSel();
+  if(State.costF < OPS[k].cost){ State.placing=null; updateHUD(); return; }
+  State.placing = (State.placing===k) ? null : k;
+  updateHUD();
+}
+
+// ---------- 选中已部署干员 ----------
+function showSel(op){
+  State.selected=op;
+  const bar=document.getElementById("selBar");
+  document.getElementById("selTxt").textContent =
+    `${op.def.name} HP ${Math.ceil(op.hp)}/${op.maxhp}`;
+  bar.style.display="flex";
+}
+function hideSel(){ State.selected=null; document.getElementById("selBar").style.display="none"; }
+
+// ---------- 输入 ----------
+cv.addEventListener("pointerdown", ev=>{
+  const rect=cv.getBoundingClientRect();
+  const sx=cv.width/rect.width, sy=cv.height/rect.height;
+  const px=(ev.clientX-rect.left)*sx, py=(ev.clientY-rect.top)*sy;
+  const c=Math.floor((px-OX)/CELL), r=Math.floor((py-OY)/CELL);
+  if(r<0||c<0||r>=ROWS||c>=COLS) return;
+
+  if(State.placing){
+    if(canPlace(State.placing,r,c) && State.costF>=OPS[State.placing].cost){
+      placeOp(State.placing,r,c);
+      State.placing=null; updateHUD();
+    } else {
+      State.placing=null; updateHUD();
+    }
+    return;
+  }
+  // 选中干员
+  const op=State.opGrid[key(r,c)];
+  if(op){ showSel(op); } else { hideSel(); }
+});
+
+document.getElementById("retreatBtn").addEventListener("click",()=>{
+  if(State.selected){ removeOp(State.selected); hideSel(); }
+});
+
+// ---------- 按钮 ----------
+document.getElementById("startBtn").addEventListener("click", startGame);
+document.getElementById("pauseBtn").addEventListener("click",()=>{
+  if(State.over || !State.started) return;
+  State.running=!State.running;
+  document.getElementById("pauseBtn").textContent = State.running?"暂停":"继续";
+});
+document.getElementById("speedBtn").addEventListener("click",()=>{
+  State.speed = State.speed===1?2:1;
+  document.getElementById("speedBtn").textContent = State.speed+"x";
+});
+
+// ---------- 流程 ----------
+function startGame(){
+  Object.assign(State,{
+    running:true, over:false, won:false, started:true,
+    time:0, costF:20, life:3, spawns:buildSpawns(), spawnIdx:0,
+    enemies:[], ops:[], effects:[], opGrid:{}, opPathIdx:[], placing:null, selected:null,
+  });
+  hideSel();
+  document.getElementById("overlay").classList.add("hide");
+  document.getElementById("pauseBtn").textContent="暂停";
+  updateHUD();
+}
+
+function gameOver(won){
+  State.over=true; State.running=false; State.won=won;
+  const ov=document.getElementById("overlay");
+  ov.classList.remove("hide");
+  ov.innerHTML = won
+    ? `<h1 style="color:#4caf50">防御成功！</h1><p>你成功抵御了全部 ${State.spawns.length} 个敌人的进攻。</p><button class="btn big" id="againBtn">再来一局</button>`
+    : `<h1 style="color:#ff6b6b">防御失败</h1><p>目标点被敌人攻陷了。再接再厉！</p><button class="btn big" id="againBtn">重新开始</button>`;
+  document.getElementById("againBtn").addEventListener("click", startGame);
+}
+
+// ---------- 主循环 ----------
+let last=performance.now();
+function loop(now){
+  let dt=(now-last)/1000; last=now;
+  dt=Math.min(dt,0.05); // 防止卡顿跳步
+  if(State.running && !State.over){
+    const steps = State.speed;
+    for(let i=0;i<steps && !State.over;i++) step(dt);
+  }
+  // 几何布局
+  OX=(cv.width-CELL*COLS)/2; OY=0;
+  draw();
+  updateHUD();
+  requestAnimationFrame(loop);
+}
+
+// 初始化
+buildDock();
+resize();
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
