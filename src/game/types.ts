@@ -40,11 +40,12 @@ export interface Operator {
   melee: boolean;
   facing: Facing;
   cells: Vec[];
-  pathIndex: number;  // 位于路径上的索引（仅近战），否则 -1
   blk: Enemy[];       // 当前阻挡的敌人（每帧重算）
+  fire: number;       // 开火动画计时（秒，递减）
+  hurt: number;       // 受击闪烁计时（秒，递减）
 }
 
-export type EnemyKind = 'normal' | 'fast' | 'tank';
+export type EnemyKind = 'normal' | 'fast' | 'tank' | 'runner' | 'brute';
 
 export interface EnemyDef {
   color: string;
@@ -61,17 +62,21 @@ export interface Enemy {
   hp: number;
   maxhp: number;
   speed: number;
-  pathPos: number;
+  path: Vec[];        // 所属路径
+  pathPos: number;    // 沿该路径的连续位置
   blockedBy: Operator | null;
   atkCd: number;
+  age: number;        // 存活时间（用于出场动画）
+  hurt: number;       // 受击闪烁计时
   dead: boolean;
 }
 
 export type Effect =
-  | { type: 'shot'; from: Vec; to: Vec; life: number; color: string }
-  | { type: 'slash'; at: Vec; ang: number; life: number; color: string }
-  | { type: 'aoe'; at: Vec; life: number; color: string }
-  | { type: 'heal'; at: Vec; life: number; color: string };
+  | { type: 'shot'; from: Vec; to: Vec; life: number; max: number; color: string }
+  | { type: 'slash'; at: Vec; ang: number; life: number; max: number; color: string }
+  | { type: 'aoe'; at: Vec; life: number; max: number; color: string }
+  | { type: 'heal'; at: Vec; life: number; max: number; color: string }
+  | { type: 'death'; at: Vec; life: number; max: number; color: string };
 
 export interface Pending {
   kind: OpKind;
@@ -81,7 +86,21 @@ export interface Pending {
   defFacing: Facing;
 }
 
-export interface Spawn { time: number; kind: EnemyKind; }
+export interface LevelSpawn { time: number; kind: EnemyKind; path: number; }
+
+/** 关卡：地图 + 多条路径 + 波次。 */
+export interface Level {
+  id: number;
+  name: string;
+  hint: string;
+  rows: number;
+  cols: number;
+  map: string[];        // 每格：r 地面 / h 高台 / x 空
+  paths: Vec[][];       // 多条敌人路径，每条为有序格子
+  spawns: LevelSpawn[];
+  life: number;
+  startCost: number;
+}
 
 /** 暴露给 UI 层的精简快照。 */
 export interface UiSnapshot {
@@ -95,4 +114,9 @@ export interface UiSnapshot {
   totalSpawns: number;
   speed: number;
   placingKind: OpKind | null;
+  levelIndex: number;
+  levelCount: number;
+  levelName: string;
+  levelHint: string;
+  hasNextLevel: boolean;
 }

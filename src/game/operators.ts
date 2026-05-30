@@ -1,24 +1,20 @@
 // 干员定义
 import type { OpDef, OpKind } from './types';
 
-/** 生成矩形 [forward, side] 偏移列表。 */
+/** 生成矩形 [forward, side] 偏移列表（含原点）。 */
 function rect(fwds: number[], sides: number[]): Array<[number, number]> {
   const a: Array<[number, number]> = [];
   for (const f of fwds) for (const s of sides) a.push([f, s]);
   return a;
 }
 
-/** 矩形区域：含干员自身所在层（fwd=0），但排除干员脚下那一格 (0,0)。 */
-function area(fwds: number[], sides: number[]): Array<[number, number]> {
-  return rect(fwds, sides).filter(([f, s]) => !(f === 0 && s === 0));
-}
-
+// 所有范围均包含干员自身格 (0,0)。
 export const RANGES: Record<OpKind, Array<[number, number]>> = {
-  guard: [[0, 0], [1, 0]],                              // 1×2 含自身格（攻击被阻挡的敌人）
-  def: [[0, 0]],                                        // 1×1 仅自身格
-  sniper: area([0, 1, 2, 3], [-1, 0, 1]),              // 3×4（含自身列）
-  caster: area([0, 1], [-1, 0, 1]),                    // 3×2（含自身列）群攻
-  medic: area([0, 1, 2], [-1, 0, 1]).concat([[3, 0]] as Array<[number, number]>), // 3×3（含自身列）+ 最前 1 格
+  guard: [[0, 0], [1, 0]],                 // 1×2（含自身）
+  def: [[0, 0]],                           // 1×1（仅自身）
+  sniper: rect([0, 1, 2, 3], [-1, 0, 1]),  // 3×4（含自身列）
+  caster: rect([-1, 0, 1], [-1, 0, 1]),    // 3×3（含自身格）群攻
+  medic: rect([0, 1, 2], [-1, 0, 1]).concat([[3, 0]] as Array<[number, number]>), // 3×3 + 最前1格
 };
 
 export const OPS: Record<OpKind, OpDef> = {
@@ -28,7 +24,7 @@ export const OPS: Record<OpKind, OpDef> = {
     aoe: false, support: false, range: RANGES.guard,
     sub: '阻挡1 · 1×2', roleTxt: '近战单体', tier: '高攻 · 中攻速 · 中血',
     blockTxt: '可阻挡 1 个敌人，优先攻击被自己阻挡的敌人。',
-    atkTxt: '攻击范围为身前 1×2，单体高伤害。',
+    atkTxt: '攻击范围为 1×2（含自身），单体高伤害。',
   },
   def: {
     kind: 'def', name: '重装', cn: '重', color: '#3c7be8',
@@ -44,15 +40,15 @@ export const OPS: Record<OpKind, OpDef> = {
     aoe: false, support: false, range: RANGES.sniper,
     sub: '远程 · 3×4', roleTxt: '远程单体', tier: '中攻 · 高攻速 · 低血',
     blockTxt: '部署于高台，不阻挡敌人。',
-    atkTxt: '攻击范围为身前 3×4，攻速快，单体输出。',
+    atkTxt: '攻击范围为 3×4（含自身列），攻速快，单体输出。',
   },
   caster: {
     kind: 'caster', name: '群法', cn: '术', color: '#b04ce8',
     melee: false, block: 0, cost: 25, atk: 70, interval: 1.5, hp: 280,
     aoe: true, support: false, range: RANGES.caster,
-    sub: '群攻 · 3×2', roleTxt: '远程群攻', tier: '高攻 · 慢攻速 · 低血',
+    sub: '群攻 · 3×3', roleTxt: '远程群攻', tier: '高攻 · 慢攻速 · 低血',
     blockTxt: '部署于高台，不阻挡敌人。',
-    atkTxt: '同时攻击范围内（身前 3×2）的所有敌人。',
+    atkTxt: '同时攻击范围内（3×3，含自身格）的所有敌人。',
   },
   medic: {
     kind: 'medic', name: '医疗', cn: '医', color: '#34d399',
@@ -60,7 +56,7 @@ export const OPS: Record<OpKind, OpDef> = {
     aoe: false, support: true, range: RANGES.medic,
     sub: '治疗 · 3×3+1', roleTxt: '治疗支援', tier: '中疗 · 中攻速 · 中血',
     blockTxt: '部署于高台，不阻挡敌人。',
-    atkTxt: '治疗范围（身前 3×3+1）内血量最低的友方干员。',
+    atkTxt: '治疗范围（3×3+1，含自身格）内血量最低的友方干员。',
   },
 };
 
