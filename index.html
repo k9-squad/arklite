@@ -8,7 +8,7 @@
   :root{
     --bg:#16161c; --panel:#1f1f2a; --panel2:#262633; --line:#33334a;
     --txt:#e8e8f0; --dim:#9a9ab0;
-    --guard:#e8913c; --def:#3c7be8; --sniper:#3ce86a; --caster:#b04ce8;
+    --guard:#e8913c; --def:#3c7be8; --sniper:#3ce86a; --caster:#b04ce8; --medic:#34d399;
   }
   *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
   html,body{margin:0;padding:0;height:100%;background:var(--bg);color:var(--txt);
@@ -35,25 +35,55 @@
     position:relative;background:var(--bg);overflow:hidden;padding:6px;}
   canvas{background:#101018;border-radius:10px;touch-action:none;display:block;}
 
-  /* 撤退提示 */
-  #selBar{position:absolute;top:8px;left:50%;transform:translateX(-50%);
-    display:none;gap:8px;align-items:center;background:rgba(0,0,0,.7);
-    padding:6px 10px;border-radius:10px;font-size:13px;border:1px solid var(--line);}
-  #selBar .btn{padding:4px 10px;}
-
   /* 底部部署条 */
-  #dock{display:flex;gap:6px;padding:8px;background:var(--panel);border-top:1px solid var(--line);}
-  .op{flex:1;background:var(--panel2);border:2px solid var(--line);border-radius:10px;
-    padding:8px 4px;text-align:center;cursor:pointer;position:relative;user-select:none;}
-  .op .nm{font-size:14px;font-weight:700;}
-  .op .sub{font-size:10px;color:var(--dim);line-height:1.25;margin-top:2px;}
-  .op .cc{font-size:13px;font-weight:700;margin-top:3px;color:#ffd54a;}
+  #dock{display:flex;gap:5px;padding:7px;background:var(--panel);border-top:1px solid var(--line);
+    overflow-x:auto;}
+  .op{flex:1 0 62px;background:var(--panel2);border:2px solid var(--line);border-radius:10px;
+    padding:7px 3px;text-align:center;cursor:pointer;position:relative;user-select:none;}
+  .op .nm{font-size:13px;font-weight:700;}
+  .op .sub{font-size:9px;color:var(--dim);line-height:1.2;margin-top:2px;}
+  .op .cc{font-size:12px;font-weight:700;margin-top:3px;color:#ffd54a;}
   .op[data-k=guard]{border-color:var(--guard);}
   .op[data-k=def]{border-color:var(--def);}
   .op[data-k=sniper]{border-color:var(--sniper);}
   .op[data-k=caster]{border-color:var(--caster);}
+  .op[data-k=medic]{border-color:var(--medic);}
   .op.sel{background:#3a3a55;box-shadow:0 0 0 2px #fff inset;}
   .op.dis{opacity:.4;filter:grayscale(.6);}
+
+  /* 已部署干员信息条 */
+  #opInfo{position:absolute;left:8px;right:8px;bottom:8px;display:none;
+    background:rgba(20,20,30,.95);border:1px solid var(--line);border-radius:12px;
+    padding:10px 12px;font-size:13px;z-index:8;}
+  #opInfo .row{display:flex;align-items:center;gap:8px;}
+  #oiName{font-weight:700;font-size:15px;flex:1;}
+  .oiBar{flex:1;height:8px;background:#000;border-radius:5px;overflow:hidden;}
+  #oiHpFill{height:100%;background:#4caf50;width:100%;}
+  #oiHpTxt{font-size:12px;color:var(--dim);min-width:74px;text-align:right;}
+  .oiStats{display:flex;flex-wrap:wrap;gap:6px 14px;margin:8px 0;}
+  .oiStats span b{color:#fff;}
+  .oiStats span{color:var(--dim);font-size:12px;}
+
+  /* 干员详情弹窗 */
+  #cardInfo{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+    background:rgba(8,8,14,.82);z-index:12;padding:18px;}
+  #cardInfo.hide{display:none;}
+  .modal{background:var(--panel);border:1px solid var(--line);border-radius:16px;
+    padding:16px;width:100%;max-width:330px;}
+  .modalHead{display:flex;align-items:center;margin-bottom:8px;}
+  #ciName{font-weight:800;font-size:19px;flex:1;}
+  .tags{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px;}
+  .tag{font-size:11px;padding:2px 8px;border-radius:20px;background:var(--panel2);
+    border:1px solid var(--line);color:var(--dim);}
+  .rangeGrid{display:grid;gap:3px;justify-content:center;margin:6px auto 12px;width:fit-content;}
+  .rgc{width:18px;height:18px;border-radius:4px;background:#23232f;}
+  .rgc.cov{background:rgba(120,255,150,.5);}
+  .rgc.heal{background:rgba(80,230,170,.55);}
+  .rgc.self{background:#fff;box-shadow:0 0 0 2px #ffd54a;}
+  .ciDesc{font-size:12.5px;color:var(--dim);line-height:1.6;margin:4px 0 14px;}
+  .ciDesc b{color:var(--txt);}
+  #ciDeploy{width:100%;font-size:15px;padding:11px;}
+  .xbtn{background:none;border:none;color:var(--dim);font-size:22px;cursor:pointer;line-height:1;padding:0 4px;}
 
   /* 覆盖层 */
   #overlay{position:absolute;inset:0;display:flex;flex-direction:column;
@@ -80,20 +110,41 @@
 
   <div id="stage">
     <canvas id="cv"></canvas>
-    <div id="selBar">
-      <span id="selTxt"></span>
-      <button class="btn" id="retreatBtn">撤退</button>
+
+    <!-- 已部署干员信息 -->
+    <div id="opInfo">
+      <div class="row"><span id="oiName"></span><button class="xbtn" id="oiClose">×</button></div>
+      <div class="row" style="margin-top:6px">
+        <div class="oiBar"><div id="oiHpFill"></div></div><span id="oiHpTxt"></span>
+      </div>
+      <div class="oiStats" id="oiStats"></div>
+      <button class="btn" id="oiRetreat" style="width:100%">撤退</button>
     </div>
+
+    <!-- 干员详情弹窗 -->
+    <div id="cardInfo" class="hide">
+      <div class="modal">
+        <div class="modalHead"><span id="ciName"></span><button class="xbtn" id="ciClose">×</button></div>
+        <div class="tags" id="ciTags"></div>
+        <div class="rangeGrid" id="ciGrid"></div>
+        <div class="oiStats" id="ciStats"></div>
+        <p class="ciDesc" id="ciDesc"></p>
+        <button class="btn" id="ciDeploy"></button>
+      </div>
+    </div>
+
     <div id="overlay">
       <h1>方舟Lite</h1>
       <p>极简版明日方舟塔防。在<b style="color:#46506e">高台</b>上部署远程干员，在<b style="color:#3a3a4a">地面</b>上部署近战干员拦截敌人。别让敌人冲进<b style="color:#ff6b6b">蓝门(目标点)</b>！</p>
       <div class="tip">
-        · 点击下方干员卡 → 点击高亮格子部署<br>
-        · <b style="color:var(--guard)">近卫</b>：阻挡1人 · 范围1×2 · 高攻<br>
-        · <b style="color:var(--def)">重装</b>：阻挡3人 · 仅自身格 · 高血<br>
-        · <b style="color:var(--sniper)">射手</b>：远程单体 · 高攻速 · 脆皮<br>
+        · 点击干员卡 → 查看详情 → 「部署」<br>
+        · 点击格子放下，<b>按住拖动可选择朝向</b>，松手确认<br>
+        · <b style="color:var(--guard)">近卫</b>：阻挡1 · 范围1×2 · 高攻<br>
+        · <b style="color:var(--def)">重装</b>：阻挡3 · 仅自身格 · 高血<br>
+        · <b style="color:var(--sniper)">射手</b>：远程3×4 · 高攻速 · 脆皮<br>
         · <b style="color:var(--caster)">群法</b>：范围群攻 · 慢攻速 · 脆皮<br>
-        · 点击已部署干员可查看范围并撤退
+        · <b style="color:var(--medic)">医疗</b>：治疗友方 · 范围3×3+1<br>
+        · 点击已部署干员可查看属性并撤退
       </div>
       <button class="btn big" id="startBtn">开始游戏</button>
     </div>
@@ -106,8 +157,8 @@
 "use strict";
 /* ============================================================
    方舟Lite — 极简塔防  (single-file canvas game)
-   注：原需求中部分数值含糊（如射手"4/15"、群法"23"），
-   这里采用合理诠释：射手=远程直线4格+近端展宽；群法=前方3×2区域群攻。
+   范围诠释：射手=身前3×4；群法=身前3×2区域群攻；医疗=身前3×3+最前1格。
+   部署时按住拖动可选择朝向；医疗为治疗支援单位（医疗费用14，需求未给定，取折中值）。
    ============================================================ */
 
 // ---------- 地图 ----------
@@ -131,20 +182,38 @@ const pathIndexAt = {}; // "r,c" -> index in PATH
 PATH.forEach((p,i)=>{ pathIndexAt[p.r+","+p.c]=i; });
 
 // ---------- 干员定义 ----------
-// offsets: [forward, side] 前方/侧向（朝向自动计算）
+// offsets: [forward, side] 前方/侧向（朝向部署时可选）
+function rect(fwds, sides){ const a=[]; for(const f of fwds) for(const s of sides) a.push([f,s]); return a; }
 const RANGES = {
   guard:  [[0,0],[1,0]],                                   // 1×2 含自身
   def:    [[0,0]],                                         // 1×1 仅自身
-  sniper: [[1,0],[2,0],[3,0],[4,0],[1,-1],[1,1],[2,-1],[2,1]], // 远程直线4 + 近端展宽
+  sniper: rect([1,2,3,4],[-1,0,1]),                        // 3×4 前方区域
   caster: [[1,-1],[1,0],[1,1],[2,-1],[2,0],[2,1]],         // 前方3×2 群攻
+  medic:  rect([1,2,3],[-1,0,1]).concat([[4,0]]),          // 3×3 + 最前1格
 };
 const OPS = {
-  guard:  {name:"近卫", cn:"卫", color:"#e8913c", melee:true,  block:1, cost:17, atk:60,  interval:0.9, hp:600,  aoe:false, range:RANGES.guard,  desc:"阻挡1 范围1×2"},
-  def:    {name:"重装", cn:"重", color:"#3c7be8", melee:true,  block:3, cost:15, atk:28,  interval:1.0, hp:1400, aoe:false, range:RANGES.def,    desc:"阻挡3 仅自身格"},
-  sniper: {name:"射手", cn:"射", color:"#3ce86a", melee:false, block:0, cost:16, atk:45,  interval:0.45,hp:250,  aoe:false, range:RANGES.sniper, desc:"远程 高攻速"},
-  caster: {name:"群法", cn:"术", color:"#b04ce8", melee:false, block:0, cost:30, atk:70,  interval:1.5, hp:280,  aoe:true,  range:RANGES.caster, desc:"范围群攻"},
+  guard:  {name:"近卫", cn:"卫", color:"#e8913c", melee:true,  block:1, cost:17, atk:60,  interval:0.9, hp:600,  aoe:false, support:false, range:RANGES.guard,
+    sub:"阻挡1 · 1×2", roleTxt:"近战单体", tier:"高攻 · 中攻速 · 中血",
+    blockTxt:"可阻挡 1 个敌人，优先攻击被自己阻挡的敌人。",
+    atkTxt:"攻击范围为身前 1×2，单体高伤害。"},
+  def:    {name:"重装", cn:"重", color:"#3c7be8", melee:true,  block:3, cost:15, atk:28,  interval:1.0, hp:1400, aoe:false, support:false, range:RANGES.def,
+    sub:"阻挡3 · 1×1", roleTxt:"近战坦克", tier:"低攻 · 中攻速 · 高血",
+    blockTxt:"可阻挡 3 个敌人，是前线的中流砥柱。",
+    atkTxt:"攻击范围仅自身 1 格，伤害较低但血量厚。"},
+  sniper: {name:"射手", cn:"射", color:"#3ce86a", melee:false, block:0, cost:16, atk:45,  interval:0.45,hp:250,  aoe:false, support:false, range:RANGES.sniper,
+    sub:"远程 · 3×4", roleTxt:"远程单体", tier:"中攻 · 高攻速 · 低血",
+    blockTxt:"部署于高台，不阻挡敌人。",
+    atkTxt:"攻击范围为身前 3×4，攻速快，单体输出。"},
+  caster: {name:"群法", cn:"术", color:"#b04ce8", melee:false, block:0, cost:25, atk:70,  interval:1.5, hp:280,  aoe:true,  support:false, range:RANGES.caster,
+    sub:"群攻 · 3×2", roleTxt:"远程群攻", tier:"高攻 · 慢攻速 · 低血",
+    blockTxt:"部署于高台，不阻挡敌人。",
+    atkTxt:"同时攻击范围内（身前 3×2）的所有敌人。"},
+  medic:  {name:"医疗", cn:"医", color:"#34d399", melee:false, block:0, cost:14, atk:60,  interval:1.0, hp:600,  aoe:false, support:true,  range:RANGES.medic,
+    sub:"治疗 · 3×3+1", roleTxt:"治疗支援", tier:"中疗 · 中攻速 · 中血",
+    blockTxt:"部署于高台，不阻挡敌人。",
+    atkTxt:"治疗范围（身前 3×3+1）内血量最低的友方干员。"},
 };
-const OP_ORDER = ["guard","def","sniper","caster"];
+const OP_ORDER = ["guard","def","sniper","caster","medic"];
 
 // ---------- 敌人定义 ----------
 const ENEMIES = {
@@ -176,7 +245,8 @@ const State = {
   enemies:[], ops:[], effects:[],
   opGrid:{},          // "r,c" -> op
   opPathIdx:[],       // index along PATH -> op (only melee)
-  placing:null,       // op key being placed
+  placing:null,       // op key being placed (card chosen)
+  pending:null,       // {kind,r,c,facing,defFacing} 正在选朝向
   selected:null,      // selected deployed op
 };
 
@@ -214,35 +284,25 @@ function enemyXY(e){
   return { x: OX + (c+0.5)*CELL, y: OY + (r+0.5)*CELL };
 }
 
-// 计算干员朝向 {dr,dc}
-function computeFacing(op){
-  if(op.melee){
-    const pi = op.pathIndex;
+// 默认朝向 {dr,dc}（部署时的初始方向，玩家可拖动改变）
+function defaultFacing(melee, r, c){
+  if(melee){
+    const pi = pathIndexAt[key(r,c)];
     const ref = pi>0 ? PATH[pi-1] : PATH[pi+1]; // 朝向敌人来向
-    const ddr = ref.r-op.r, ddc = ref.c-op.c;
-    return Math.abs(ddr)>=Math.abs(ddc) ? {dr:sign(ddr),dc:0} : {dr:0,dc:sign(ddc)};
-  } else {
-    // 朝向最近路径格
-    let best=null, bd=1e9;
-    for(const p of PATH){
-      const d=(p.r-op.r)**2+(p.c-op.c)**2;
-      if(d<bd){bd=d;best=p;}
-    }
-    const ddr=best.r-op.r, ddc=best.c-op.c;
-    if(ddr===0&&ddc===0) return {dr:-1,dc:0};
+    const ddr = ref.r-r, ddc = ref.c-c;
     return Math.abs(ddr)>=Math.abs(ddc) ? {dr:sign(ddr),dc:0} : {dr:0,dc:sign(ddc)};
   }
+  // 远程：朝向最近路径格
+  let best=null, bd=1e9;
+  for(const p of PATH){ const d=(p.r-r)**2+(p.c-c)**2; if(d<bd){bd=d;best=p;} }
+  const ddr=best.r-r, ddc=best.c-c;
+  if(ddr===0&&ddc===0) return {dr:-1,dc:0};
+  return Math.abs(ddr)>=Math.abs(ddc) ? {dr:sign(ddr),dc:0} : {dr:0,dc:sign(ddc)};
 }
 // 由朝向+偏移列表得到实际覆盖格
-function rangeCells(op){
-  const f = op.facing;
-  // forwardVec=f ; sideVec=(f.dc, -f.dr)
-  const sv = {dr:f.dc, dc:-f.dr};
-  const cells=[];
-  for(const [fwd,side] of op.def.range){
-    cells.push({ r: op.r + fwd*f.dr + side*sv.dr, c: op.c + fwd*f.dc + side*sv.dc });
-  }
-  return cells;
+function cellsFor(def, r, c, f){
+  const sv = {dr:f.dc, dc:-f.dr};   // forwardVec=f ; sideVec=(f.dc,-f.dr)
+  return def.range.map(([fwd,side])=>({ r: r + fwd*f.dr + side*sv.dr, c: c + fwd*f.dc + side*sv.dc }));
 }
 
 // ---------- 部署 ----------
@@ -253,12 +313,12 @@ function canPlace(kind, r, c){
   if(def.melee) return t==="r";
   return t==="h";
 }
-function placeOp(kind, r, c){
+function placeOp(kind, r, c, facing){
   const def = OPS[kind];
   const op = { kind, def, r, c, hp:def.hp, maxhp:def.hp, cd:0, block:def.melee?def.block:0,
                melee:def.melee, _blk:[], pathIndex: def.melee?pathIndexAt[key(r,c)]:-1 };
-  op.facing = computeFacing(op);
-  op.cells = rangeCells(op);
+  op.facing = facing || defaultFacing(def.melee, r, c);
+  op.cells = cellsFor(def, r, c, op.facing);
   State.ops.push(op);
   State.opGrid[key(r,c)] = op;
   if(def.melee && op.pathIndex>=0) State.opPathIdx[op.pathIndex]=op;
@@ -319,21 +379,34 @@ function step(dt){
       const op = e.blockedBy;
       op.hp -= e.def.atk;
       if(op.hp<=0){
-        if(State.selected===op) hideSel();
+        if(State.selected===op) closeOpInfo();
         removeOp(op);
       }
     }
   }
 
-  // 干员攻击
+  // 干员攻击 / 治疗
   for(const op of State.ops){
     op.cd -= dt;
     if(op.cd>0) continue;
     const rangeSet = new Set(op.cells.map(c=>key(c.r,c.c)));
+    const from = { x:OX+(op.c+0.5)*CELL, y:OY+(op.r+0.5)*CELL };
+
+    if(op.def.support){
+      // 治疗：范围内血量最低（且未满）的友方干员
+      const allies = State.ops.filter(o=>o!==op && o.hp<o.maxhp && rangeSet.has(key(o.r,o.c)));
+      if(allies.length===0) continue;
+      let t=allies[0];
+      for(const o of allies) if(o.hp/o.maxhp < t.hp/t.maxhp) t=o;
+      op.cd = op.def.interval;
+      t.hp = Math.min(t.maxhp, t.hp + op.def.atk);
+      State.effects.push({type:"heal", x:OX+(t.c+0.5)*CELL, y:OY+(t.r+0.5)*CELL, life:0.4, color:op.def.color});
+      continue;
+    }
+
     const inRange = State.enemies.filter(e=>!e.dead && rangeSet.has(key(enemyCell(e).r, enemyCell(e).c)));
     if(inRange.length===0) continue;
     op.cd = op.def.interval;
-    const from = { x:OX+(op.c+0.5)*CELL, y:OY+(op.r+0.5)*CELL };
     if(op.def.aoe){
       for(const e of inRange){ damage(e, op.def.atk); }
       // AoE 视觉：覆盖中心闪光
@@ -347,7 +420,13 @@ function step(dt){
       for(const e of cand) if(e.pathPos>target.pathPos) target=e;
       damage(target, op.def.atk);
       const to = enemyXY(target);
-      State.effects.push({type:"shot", x:from.x, y:from.y, tx:to.x, ty:to.y, life:0.12, color:op.def.color});
+      if(op.melee){
+        // 近战挥砍特效
+        State.effects.push({type:"slash", x:to.x, y:to.y, life:0.18,
+          ang:Math.atan2(to.y-from.y, to.x-from.x), color:op.def.color});
+      } else {
+        State.effects.push({type:"shot", x:from.x, y:from.y, tx:to.x, ty:to.y, life:0.12, color:op.def.color});
+      }
     }
   }
 
@@ -412,6 +491,18 @@ function draw(){
       roundRect(OX+c.c*CELL+3,OY+c.r*CELL+3,CELL-6,CELL-6,6); ctx.fill();
     }
   }
+  // 部署朝向预览
+  if(State.pending){
+    const p=State.pending, def=OPS[p.kind];
+    const cells=cellsFor(def, p.r, p.c, p.facing);
+    const cov = def.support ? "rgba(80,230,170,.30)" : "rgba(120,255,150,.28)";
+    for(const c of cells){
+      if(c.r<0||c.c<0||c.r>=ROWS||c.c>=COLS) continue;
+      ctx.fillStyle=cov;
+      roundRect(OX+c.c*CELL+3,OY+c.r*CELL+3,CELL-6,CELL-6,6); ctx.fill();
+    }
+    drawPendingArrow(p, def);
+  }
 
   // 干员
   for(const op of State.ops) drawOp(op);
@@ -439,6 +530,8 @@ function drawOp(op){
   } else if(op.kind==="caster"){ // 菱形
     ctx.beginPath(); ctx.moveTo(x,y-s); ctx.lineTo(x+s,y); ctx.lineTo(x,y+s); ctx.lineTo(x-s,y); ctx.closePath();
     ctx.fill(); ctx.stroke();
+  } else if(op.kind==="medic"){ // 圆形
+    ctx.beginPath(); ctx.arc(x,y,s,0,7); ctx.fill(); ctx.stroke();
   } else { // 方块
     roundRect(x-s,y-s,s*2,s*2,5); ctx.fill(); ctx.stroke();
   }
@@ -456,6 +549,27 @@ function drawOp(op){
     ctx.fillStyle="#000"; ctx.fillRect(bx,by,w,4);
     ctx.fillStyle="#4caf50"; ctx.fillRect(bx,by,w*clamp(op.hp/op.maxhp,0,1),4);
   }
+}
+
+function drawPendingArrow(p, def){
+  const x=OX+(p.c+0.5)*CELL, y=OY+(p.r+0.5)*CELL, s=CELL*0.34;
+  // 干员虚影
+  ctx.globalAlpha=0.9; ctx.fillStyle=def.color; ctx.strokeStyle="#fff"; ctx.lineWidth=2;
+  roundRect(x-s,y-s,s*2,s*2,5); ctx.fill(); ctx.stroke();
+  ctx.fillStyle="#1a1a1a"; ctx.font=`bold ${CELL*0.30}px sans-serif`;
+  ctx.textAlign="center"; ctx.textBaseline="middle"; ctx.fillText(def.cn,x,y+1);
+  ctx.globalAlpha=1;
+  // 朝向大箭头
+  const f=p.facing, len=CELL*0.7;
+  const ax=x+f.dc*len, ay=y+f.dr*len;
+  ctx.strokeStyle="#ffd54a"; ctx.fillStyle="#ffd54a"; ctx.lineWidth=4;
+  ctx.beginPath(); ctx.moveTo(x,y); ctx.lineTo(ax,ay); ctx.stroke();
+  const a=Math.atan2(f.dr,f.dc), h=CELL*0.16;
+  ctx.beginPath();
+  ctx.moveTo(ax,ay);
+  ctx.lineTo(ax-h*Math.cos(a-0.5), ay-h*Math.sin(a-0.5));
+  ctx.lineTo(ax-h*Math.cos(a+0.5), ay-h*Math.sin(a+0.5));
+  ctx.closePath(); ctx.fill();
 }
 
 function drawEnemy(e){
@@ -479,6 +593,28 @@ function drawEffect(ef){
   } else if(ef.type==="aoe"){
     ctx.fillStyle=ef.color; ctx.globalAlpha=clamp(ef.life/0.25,0,1)*0.5;
     ctx.beginPath(); ctx.arc(ef.x,ef.y,CELL*0.9*(1.2-ef.life/0.25),0,7); ctx.fill();
+    ctx.globalAlpha=1;
+  } else if(ef.type==="slash"){
+    // 近战挥砍：一道弧形刀光
+    const t=1-ef.life/0.18;               // 0→1 进度
+    const rad=CELL*0.42, sweep=2.0;
+    const a0=ef.ang - sweep/2 + sweep*t;
+    ctx.globalAlpha=clamp(ef.life/0.18,0,1);
+    ctx.lineCap="round";
+    ctx.strokeStyle="#ffffff"; ctx.lineWidth=CELL*0.13;
+    ctx.beginPath(); ctx.arc(ef.x,ef.y,rad,a0-0.5,a0+0.5); ctx.stroke();
+    ctx.strokeStyle=ef.color; ctx.lineWidth=CELL*0.06;
+    ctx.beginPath(); ctx.arc(ef.x,ef.y,rad,a0-0.5,a0+0.5); ctx.stroke();
+    ctx.lineCap="butt"; ctx.globalAlpha=1;
+  } else if(ef.type==="heal"){
+    const t=ef.life/0.4;
+    ctx.globalAlpha=clamp(t,0,1);
+    ctx.strokeStyle=ef.color; ctx.lineWidth=3;
+    ctx.beginPath(); ctx.arc(ef.x,ef.y,CELL*0.45*(1.3-t),0,7); ctx.stroke();
+    // 十字
+    ctx.fillStyle=ef.color; const cs=CELL*0.10, cy=ef.y-CELL*0.05;
+    ctx.fillRect(ef.x-cs/3, cy-cs, cs*0.66, cs*2);
+    ctx.fillRect(ef.x-cs, cy-cs/3, cs*2, cs*0.66);
     ctx.globalAlpha=1;
   }
 }
@@ -509,54 +645,128 @@ function buildDock(){
     const el=document.createElement("div");
     el.className="op"; el.dataset.k=k;
     el.innerHTML=`<div class="nm" style="color:${o.color}">${o.name}</div>
-      <div class="sub">${o.desc}</div><div class="cc">${o.cost}</div>`;
-    el.addEventListener("click",()=>selectPlacing(k));
+      <div class="sub">${o.sub}</div><div class="cc">${o.cost}</div>`;
+    el.addEventListener("click",()=>openCardInfo(k));
     dock.appendChild(el);
   }
 }
 
-function selectPlacing(k){
-  hideSel();
-  if(State.costF < OPS[k].cost){ State.placing=null; updateHUD(); return; }
-  State.placing = (State.placing===k) ? null : k;
-  updateHUD();
+// ---------- 干员详情弹窗 ----------
+function rangeGrid(o){
+  const cov=new Set(o.range.map(([f,s])=>(-f)+","+s));   // 默认朝上：display row=-fwd
+  let minR=0,maxR=0,minC=0,maxC=0;
+  for(const [f,s] of o.range){ minR=Math.min(minR,-f);maxR=Math.max(maxR,-f);minC=Math.min(minC,s);maxC=Math.max(maxC,s); }
+  let html="";
+  for(let r=minR;r<=maxR;r++) for(let c=minC;c<=maxC;c++){
+    let cls="rgc";
+    if(r===0&&c===0) cls+=" self";
+    else if(cov.has(r+","+c)) cls+=(o.support?" heal":" cov");
+    html+=`<div class="${cls}"></div>`;
+  }
+  return {w:maxC-minC+1, html};
 }
 
-// ---------- 选中已部署干员 ----------
-function showSel(op){
-  State.selected=op;
-  const bar=document.getElementById("selBar");
-  document.getElementById("selTxt").textContent =
-    `${op.def.name} HP ${Math.ceil(op.hp)}/${op.maxhp}`;
-  bar.style.display="flex";
+function openCardInfo(k){
+  closeOpInfo();
+  const o=OPS[k];
+  const nm=document.getElementById("ciName");
+  nm.textContent=o.name; nm.style.color=o.color;
+  const pos=o.melee?"部署：地面":"部署：高台";
+  document.getElementById("ciTags").innerHTML=[o.roleTxt,pos,o.tier]
+    .map(t=>`<span class="tag">${t}</span>`).join("");
+  const rg=rangeGrid(o);
+  const g=document.getElementById("ciGrid");
+  g.style.gridTemplateColumns=`repeat(${rg.w},18px)`; g.innerHTML=rg.html;
+  const statLabel=o.support?"治疗量":"攻击力";
+  document.getElementById("ciStats").innerHTML=[
+    [statLabel,o.atk],["攻击间隔",o.interval+"s"],["生命值",o.hp],
+    ["阻挡数",o.melee?o.block:"—"],["部署费用",o.cost],
+  ].map(([l,v])=>`<span>${l} <b>${v}</b></span>`).join("");
+  document.getElementById("ciDesc").innerHTML=`${o.atkTxt}<br>${o.blockTxt}`;
+  const btn=document.getElementById("ciDeploy");
+  const afford=State.started && !State.over && State.costF>=o.cost;
+  btn.textContent=!State.started?"请先开始游戏":(afford?`部署（${o.cost} 费）`:`费用不足（需 ${o.cost}）`);
+  btn.style.opacity=afford?"1":".5";
+  btn.onclick=()=>{ if(afford){ closeCardInfo(); startPlacing(k); } };
+  document.getElementById("cardInfo").classList.remove("hide");
 }
-function hideSel(){ State.selected=null; document.getElementById("selBar").style.display="none"; }
+function closeCardInfo(){ document.getElementById("cardInfo").classList.add("hide"); }
 
-// ---------- 输入 ----------
-cv.addEventListener("pointerdown", ev=>{
+function startPlacing(k){
+  if(!State.started||State.over||State.costF<OPS[k].cost) return;
+  closeOpInfo();
+  State.placing=k; State.pending=null; updateHUD();
+}
+
+// ---------- 已部署干员信息 ----------
+function showOpInfo(op){ State.selected=op; document.getElementById("opInfo").style.display="block"; updateOpInfo(); }
+function updateOpInfo(){
+  const op=State.selected; if(!op) return;
+  const nm=document.getElementById("oiName");
+  nm.textContent=op.def.name; nm.style.color=op.def.color;
+  const ratio=clamp(op.hp/op.maxhp,0,1);
+  const fill=document.getElementById("oiHpFill");
+  fill.style.width=(ratio*100)+"%";
+  fill.style.background=ratio>0.5?"#4caf50":ratio>0.25?"#e6b800":"#e05050";
+  document.getElementById("oiHpTxt").textContent=`HP ${Math.ceil(op.hp)}/${op.maxhp}`;
+  document.getElementById("oiStats").innerHTML=[
+    [op.def.support?"治疗":"攻击力",op.def.atk],["攻击间隔",op.def.interval+"s"],
+    ["阻挡",op.melee?op.def.block:"—"],
+  ].map(([l,v])=>`<span>${l} <b>${v}</b></span>`).join("");
+}
+function closeOpInfo(){ State.selected=null; document.getElementById("opInfo").style.display="none"; }
+
+// ---------- 输入（部署 + 拖动选朝向）----------
+function cvCoords(ev){
   const rect=cv.getBoundingClientRect();
   const sx=cv.width/rect.width, sy=cv.height/rect.height;
   const px=(ev.clientX-rect.left)*sx, py=(ev.clientY-rect.top)*sy;
-  const c=Math.floor((px-OX)/CELL), r=Math.floor((py-OY)/CELL);
-  if(r<0||c<0||r>=ROWS||c>=COLS) return;
-
+  let c=Math.floor((px-OX)/CELL), r=Math.floor((py-OY)/CELL);
+  if(r<0||c<0||r>=ROWS||c>=COLS){ r=-1; c=-1; }
+  return {r,c,px,py};
+}
+let drag=false;
+cv.addEventListener("pointerdown", ev=>{
+  if(!State.started||State.over) return;
+  const {r,c,px,py}=cvCoords(ev);
   if(State.placing){
-    if(canPlace(State.placing,r,c) && State.costF>=OPS[State.placing].cost){
-      placeOp(State.placing,r,c);
-      State.placing=null; updateHUD();
-    } else {
-      State.placing=null; updateHUD();
-    }
+    if(r>=0 && canPlace(State.placing,r,c) && State.costF>=OPS[State.placing].cost){
+      const f=defaultFacing(OPS[State.placing].melee,r,c);
+      State.pending={kind:State.placing,r,c,facing:f,defFacing:f};
+      drag=true;
+      try{ cv.setPointerCapture(ev.pointerId); }catch(e){}
+    } else { State.placing=null; updateHUD(); }
     return;
   }
-  // 选中干员
+  if(r<0){ closeOpInfo(); return; }
   const op=State.opGrid[key(r,c)];
-  if(op){ showSel(op); } else { hideSel(); }
+  if(op) showOpInfo(op); else closeOpInfo();
 });
+cv.addEventListener("pointermove", ev=>{
+  if(!drag || !State.pending) return;
+  const {px,py}=cvCoords(ev);
+  const p=State.pending;
+  const cx=OX+(p.c+0.5)*CELL, cy=OY+(p.r+0.5)*CELL;
+  const dx=px-cx, dy=py-cy;
+  p.facing = Math.hypot(dx,dy)<CELL*0.35 ? p.defFacing
+           : (Math.abs(dx)>Math.abs(dy) ? {dr:0,dc:sign(dx)} : {dr:sign(dy),dc:0});
+});
+function finishPending(){
+  if(drag && State.pending){
+    const p=State.pending;
+    if(State.costF>=OPS[p.kind].cost) placeOp(p.kind,p.r,p.c,p.facing);
+    State.pending=null; State.placing=null; updateHUD();
+  }
+  drag=false;
+}
+cv.addEventListener("pointerup", finishPending);
+cv.addEventListener("pointercancel", finishPending);
 
-document.getElementById("retreatBtn").addEventListener("click",()=>{
-  if(State.selected){ removeOp(State.selected); hideSel(); }
-});
+// 弹窗按钮
+document.getElementById("ciClose").addEventListener("click", closeCardInfo);
+document.getElementById("cardInfo").addEventListener("click", ev=>{ if(ev.target.id==="cardInfo") closeCardInfo(); });
+document.getElementById("oiClose").addEventListener("click", closeOpInfo);
+document.getElementById("oiRetreat").addEventListener("click",()=>{ if(State.selected){ removeOp(State.selected); closeOpInfo(); } });
 
 // ---------- 按钮 ----------
 document.getElementById("startBtn").addEventListener("click", startGame);
@@ -575,9 +785,9 @@ function startGame(){
   Object.assign(State,{
     running:true, over:false, won:false, started:true,
     time:0, costF:20, life:3, spawns:buildSpawns(), spawnIdx:0,
-    enemies:[], ops:[], effects:[], opGrid:{}, opPathIdx:[], placing:null, selected:null,
+    enemies:[], ops:[], effects:[], opGrid:{}, opPathIdx:[], placing:null, pending:null, selected:null,
   });
-  hideSel();
+  closeOpInfo(); closeCardInfo();
   document.getElementById("overlay").classList.add("hide");
   document.getElementById("pauseBtn").textContent="暂停";
   updateHUD();
@@ -585,6 +795,8 @@ function startGame(){
 
 function gameOver(won){
   State.over=true; State.running=false; State.won=won;
+  State.placing=null; State.pending=null;
+  closeOpInfo(); closeCardInfo();
   const ov=document.getElementById("overlay");
   ov.classList.remove("hide");
   ov.innerHTML = won
@@ -606,6 +818,7 @@ function loop(now){
   OX=(cv.width-CELL*COLS)/2; OY=0;
   draw();
   updateHUD();
+  if(State.selected) updateOpInfo();
   requestAnimationFrame(loop);
 }
 
