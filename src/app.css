@@ -7,11 +7,12 @@
 html,body{margin:0;padding:0;height:100%;background:var(--bg);color:var(--txt);
   font-family:-apple-system,"PingFang SC","Microsoft YaHei",system-ui,sans-serif;
   overflow:hidden; touch-action:manipulation;}
-#app{display:flex;flex-direction:column;height:100vh;max-width:520px;margin:0 auto;}
+#app{display:flex;flex-direction:column;height:100vh;height:100dvh;max-width:520px;margin:0 auto;}
 
 /* 顶部状态 */
-#hud{display:flex;align-items:center;gap:6px;padding:8px 10px;background:var(--panel);
-  border-bottom:1px solid var(--line);font-size:14px;}
+#hud{display:flex;align-items:center;gap:6px;padding:8px 10px;
+  padding-top:calc(8px + env(safe-area-inset-top));background:var(--panel);
+  border-bottom:1px solid var(--line);font-size:14px;flex:none;}
 .stat{display:flex;align-items:center;gap:4px;font-weight:600;}
 .stat .lbl{color:var(--dim);font-weight:400;font-size:12px;}
 .stat .cost{color:#ffd54a;}
@@ -29,8 +30,8 @@ html,body{margin:0;padding:0;height:100%;background:var(--bg);color:var(--txt);
 canvas{background:#101018;border-radius:10px;touch-action:none;display:block;}
 
 /* 底部部署条 */
-#dock{display:flex;gap:5px;padding:7px;background:var(--panel);border-top:1px solid var(--line);
-  overflow-x:auto;}
+#dock{display:flex;gap:5px;padding:7px;padding-bottom:calc(7px + env(safe-area-inset-bottom));
+  background:var(--panel);border-top:1px solid var(--line);overflow-x:auto;flex:none;}
 .op{flex:1 0 62px;background:var(--panel2);border:2px solid var(--line);border-radius:10px;
   padding:7px 3px;text-align:center;cursor:pointer;position:relative;user-select:none;}
 .op .nm{font-size:13px;font-weight:700;}

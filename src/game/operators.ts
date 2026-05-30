@@ -8,12 +8,17 @@ function rect(fwds: number[], sides: number[]): Array<[number, number]> {
   return a;
 }
 
+/** 矩形区域：含干员自身所在层（fwd=0），但排除干员脚下那一格 (0,0)。 */
+function area(fwds: number[], sides: number[]): Array<[number, number]> {
+  return rect(fwds, sides).filter(([f, s]) => !(f === 0 && s === 0));
+}
+
 export const RANGES: Record<OpKind, Array<[number, number]>> = {
-  guard: [[0, 0], [1, 0]],                              // 1×2 含自身
-  def: [[0, 0]],                                        // 1×1 仅自身
-  sniper: rect([1, 2, 3, 4], [-1, 0, 1]),              // 身前 3×4
-  caster: [[1, -1], [1, 0], [1, 1], [2, -1], [2, 0], [2, 1]], // 身前 3×2 群攻
-  medic: rect([1, 2, 3], [-1, 0, 1]).concat([[4, 0]]), // 3×3 + 最前 1 格
+  guard: [[0, 0], [1, 0]],                              // 1×2 含自身格（攻击被阻挡的敌人）
+  def: [[0, 0]],                                        // 1×1 仅自身格
+  sniper: area([0, 1, 2, 3], [-1, 0, 1]),              // 3×4（含自身列）
+  caster: area([0, 1], [-1, 0, 1]),                    // 3×2（含自身列）群攻
+  medic: area([0, 1, 2], [-1, 0, 1]).concat([[3, 0]] as Array<[number, number]>), // 3×3（含自身列）+ 最前 1 格
 };
 
 export const OPS: Record<OpKind, OpDef> = {
