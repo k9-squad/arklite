@@ -19,6 +19,7 @@ export interface OpDef {
   hp: number;
   aoe: boolean;
   support: boolean;
+  magic: boolean;     // true=魔法伤害(无视护甲)；false=物理伤害(受护甲减免)
   range: Array<[number, number]>;
   sub: string;        // 卡片副标题
   roleTxt: string;
@@ -53,6 +54,7 @@ export interface EnemyDef {
   speed: number;
   atk: number;
   atkInt: number;
+  armor: number;      // 物理防御力（魔法伤害无视）
   rad: number;
 }
 
@@ -119,4 +121,6 @@ export interface UiSnapshot {
   levelName: string;
   levelHint: string;
   hasNextLevel: boolean;
+  stars: number;      // 本局结算星级：3=完美通关，2=通关但有漏怪，0=未通关
+  leaked: boolean;    // 是否有敌人进入目标点
 }

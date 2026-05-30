@@ -124,7 +124,7 @@
     cost={ui.cost} life={ui.life} {wave} speed={ui.speed}
     levelLabel={`${ui.levelIndex + 1}-${ui.levelName}`}
     running={ui.running} started={ui.started} over={ui.over}
-    onPause={pause} onSpeed={speed}
+    onPause={pause} onSpeed={speed} onRestart={retry}
   />
 
   <div id="stage" bind:this={stageEl}>
@@ -150,7 +150,7 @@
     {#if !ui.started || ui.over}
       <StartOverlay
         started={ui.started} over={ui.over} won={ui.won}
-        total={ui.totalSpawns}
+        total={ui.totalSpawns} stars={ui.stars} leaked={ui.leaked}
         levelLabel={`第 ${ui.levelIndex + 1} / ${ui.levelCount} 关 · ${ui.levelName}`}
         levelHint={ui.levelHint}
         hasNext={ui.hasNextLevel}

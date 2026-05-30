@@ -2,7 +2,7 @@
 import type {
   Effect, Enemy, Facing, Level, Operator, OpKind, Pending, UiSnapshot, Vec,
 } from './types';
-import { COST_PER_SEC, MAX_COST } from './config';
+import { COST_PER_SEC, MAX_COST, MIN_DAMAGE } from './config';
 import { OPS } from './operators';
 import { ENEMIES } from './enemies';
 import { LEVELS } from './levels';
@@ -25,6 +25,7 @@ export class GameEngine {
   speed = 1;
   costF = 20;
   life = 5;
+  leaked = false;     // 本局是否有敌人进入目标点
 
   spawnIdx = 0;
 
@@ -50,6 +51,7 @@ export class GameEngine {
     this.speed = 1;
     this.costF = this.level.startCost;
     this.life = this.level.life;
+    this.leaked = false;
     this.spawnIdx = 0;
     this.enemies = [];
     this.ops = [];
@@ -80,6 +82,12 @@ export class GameEngine {
   }
 
   hasNextLevel(): boolean { return this.levelIndex < LEVELS.length - 1; }
+
+  /** 结算星级：3=完美（无漏怪），2=通关但漏怪，0=未通关。 */
+  stars(): number {
+    if (!this.over || !this.won) return 0;
+    return this.leaked ? 2 : 3;
+  }
 
   /** 通关后进入下一关。 */
   nextLevel(): void {
@@ -258,6 +266,7 @@ export class GameEngine {
       if (!e.dead && e.pathPos >= e.path.length - 1 - 1e-6) {
         e.dead = true;
         this.life--;
+        this.leaked = true;
         if (this.life <= 0) this.end(false);
       }
     }
@@ -303,7 +312,7 @@ export class GameEngine {
       op.fire = 0.2;
 
       if (op.def.aoe) {
-        for (const e of inRange) this.damage(e, op.def.atk);
+        for (const e of inRange) this.damage(e, op.def.atk, op.def.magic);
         let sr = 0, sc = 0;
         for (const c of op.cells) { sr += c.r; sc += c.c; }
         this.push({ type: 'aoe', at: { r: sr / op.cells.length, c: sc / op.cells.length }, life: 0.32, max: 0.32, color: op.def.color });
@@ -312,7 +321,7 @@ export class GameEngine {
         if (cand.length === 0) cand = inRange;
         let target = cand[0];
         for (const e of cand) if (e.pathPos > target.pathPos) target = e;
-        this.damage(target, op.def.atk);
+        this.damage(target, op.def.atk, op.def.magic);
         const to = this.enemyRC(target);
         if (op.melee) {
           this.push({ type: 'slash', at: to, ang: Math.atan2(to.r - op.r, to.c - op.c), life: 0.2, max: 0.2, color: op.def.color });
@@ -333,8 +342,10 @@ export class GameEngine {
     return { r: a.r + (b.r - a.r) * f, c: a.c + (b.c - a.c) * f };
   }
 
-  private damage(e: Enemy, amt: number): void {
-    e.hp -= amt;
+  /** 结算伤害。物理伤害受护甲减免（保底 MIN_DAMAGE）；魔法伤害无视护甲。 */
+  private damage(e: Enemy, amt: number, magic: boolean): void {
+    const dealt = magic ? amt : Math.max(amt - e.def.armor, MIN_DAMAGE);
+    e.hp -= dealt;
     e.hurt = 0.12;
     if (e.hp <= 0 && !e.dead) {
       e.dead = true;
@@ -369,6 +380,8 @@ export class GameEngine {
       levelName: this.level.name,
       levelHint: this.level.hint,
       hasNextLevel: this.hasNextLevel(),
+      stars: this.stars(),
+      leaked: this.leaked,
     };
   }
 }

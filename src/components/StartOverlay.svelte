@@ -1,12 +1,14 @@
 <script lang="ts">
   let {
-    started, over, won, total, levelLabel, levelHint, hasNext,
+    started, over, won, total, stars, leaked, levelLabel, levelHint, hasNext,
     onStart, onRetry, onNext,
   }: {
     started: boolean;
     over: boolean;
     won: boolean;
     total: number;
+    stars: number;
+    leaked: boolean;
     levelLabel: string;
     levelHint: string;
     hasNext: boolean;
@@ -21,7 +23,12 @@
     {#if won}
       <h1 style="color:#5fd16a">防御成功！</h1>
       <p class="lvltag">{levelLabel}</p>
-      <p>你成功抵御了全部 {total} 个敌人的进攻。</p>
+      <div class="stars" aria-label={`${stars} 星`}>
+        {#each [0, 1, 2] as i}
+          <span class="star" class:on={i < stars}>★</span>
+        {/each}
+      </div>
+      <p>{leaked ? `有敌人突破防线，获得 ${stars} 星` : `完美通关！无一漏怪，获得 ${stars} 星`}</p>
       {#if hasNext}
         <button class="btn big" onclick={onNext}>进入下一关 →</button>
         <button class="btn ghost" onclick={onRetry}>重打本关</button>

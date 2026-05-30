@@ -2,3 +2,4 @@
 
 export const MAX_COST = 99;
 export const COST_PER_SEC = 1;
+export const MIN_DAMAGE = 5; // 物理伤害保底值

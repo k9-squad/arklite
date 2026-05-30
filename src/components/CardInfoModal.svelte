@@ -15,6 +15,7 @@
   const tags = $derived([def.roleTxt, def.melee ? '部署：地面' : '部署：高台', def.tier]);
   const stats = $derived([
     [def.support ? '治疗量' : '攻击力', def.atk],
+    ['伤害类型', def.support ? '治疗' : def.magic ? '魔法(无视护甲)' : '物理'],
     ['攻击间隔', def.interval + 's'],
     ['生命值', def.hp],
     ['阻挡数', def.melee ? def.block : '—'],
