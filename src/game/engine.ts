@@ -1,8 +1,8 @@
 // 游戏引擎：持有全部状态并推进模拟。完全独立于 DOM / 渲染 / 框架。
 import type {
-  Effect, Enemy, Facing, Level, Operator, OpKind, Pending, UiSnapshot, Vec,
+  Effect, Enemy, Facing, Level, Operator, OpKind, Pending, Projectile, UiSnapshot, Vec,
 } from './types';
-import { COST_PER_SEC, MAX_COST, MIN_DAMAGE } from './config';
+import { BULLET_TIME, COST_PER_SEC, HP_EASE, MAX_COST, MIN_DAMAGE, PROJECTILE_SPEED } from './config';
 import { OPS } from './operators';
 import { ENEMIES } from './enemies';
 import { LEVELS } from './levels';
@@ -33,6 +33,7 @@ export class GameEngine {
   enemies: Enemy[] = [];
   ops: Operator[] = [];
   effects: Effect[] = [];
+  projectiles: Projectile[] = [];
 
   // 部署 / 选择
   placing: OpKind | null = null;
@@ -56,6 +57,7 @@ export class GameEngine {
     this.enemies = [];
     this.ops = [];
     this.effects = [];
+    this.projectiles = [];
     this.opGrid = {};
     this.blockGrid = this.level.paths.map(() => []);
     this.placing = null;
@@ -110,11 +112,23 @@ export class GameEngine {
     return this.speed;
   }
 
+  /** 部署落子、瞄准朝向期间进入子弹时间，给玩家决策时间。 */
+  get bulletTime(): boolean { return this.pending !== null; }
+
   update(dt: number): void {
-    // 特效始终推进（即便暂停/结算，让结算瞬间的特效播放完）
+    // 特效与弹道、血条缓动始终推进（即便暂停/结算，让动画播放完）
     this.advanceEffects(dt);
+    this.advanceProjectiles(dt);
+    this.smoothHp(dt);
     if (!this.running || this.over) return;
+    if (this.bulletTime) { this.step(dt * BULLET_TIME); return; }
     for (let i = 0; i < this.speed && !this.over; i++) this.step(dt);
+  }
+
+  private smoothHp(dt: number): void {
+    const f = Math.min(1, HP_EASE * dt);
+    for (const o of this.ops) o.hpShown += (o.hp - o.hpShown) * f;
+    for (const e of this.enemies) e.hpShown += (e.hp - e.hpShown) * f;
   }
 
   // ---------- 部署 ----------
@@ -167,7 +181,7 @@ export class GameEngine {
       block: def.melee ? def.block : 0,
       melee: def.melee, facing,
       cells: cellsFor(def, r, c, facing),
-      blk: [], fire: 0, hurt: 0,
+      blk: [], fire: 0, hurt: 0, hpShown: def.hp,
     };
     this.ops.push(op);
     this.opGrid[key(r, c)] = op;
@@ -233,7 +247,8 @@ export class GameEngine {
       const path = this.level.paths[sp.path] ?? this.level.paths[0];
       this.enemies.push({
         kind: sp.kind, def: ed, hp: ed.hp, maxhp: ed.hp, speed: ed.speed,
-        path, pathPos: 0, blockedBy: null, atkCd: 0, age: 0, hurt: 0, dead: false,
+        path, pathPos: 0, blockedBy: null, blockSlot: -1, blockTotal: 0,
+        atkCd: 0, age: 0, hurt: 0, hpShown: ed.hp, dead: false,
       });
     }
   }
@@ -245,6 +260,7 @@ export class GameEngine {
     for (const e of order) {
       if (e.dead) continue;
       e.blockedBy = null;
+      e.blockSlot = -1;
       const pIdx = this.level.paths.indexOf(e.path);
       const col = this.blockGrid[pIdx] ?? [];
       const newPos = e.pathPos + e.speed * dt;
@@ -254,10 +270,15 @@ export class GameEngine {
       for (let ti = startTile; ti <= endTile; ti++) {
         const op = col[ti];
         if (op && op.block > 0 && op.blk.length < op.block) {
-          e.pathPos = ti; op.blk.push(e); e.blockedBy = op; blocked = true; break;
+          e.pathPos = ti; e.blockSlot = op.blk.length; op.blk.push(e);
+          e.blockedBy = op; blocked = true; break;
         }
       }
       if (!blocked) e.pathPos = Math.min(newPos, e.path.length - 1);
+    }
+    // 记录各敌人所在阻挡组的总数（供错开布局）
+    for (const e of this.enemies) {
+      e.blockTotal = e.blockedBy ? e.blockedBy.blk.length : 0;
     }
   }
 
@@ -299,8 +320,8 @@ export class GameEngine {
         for (const o of allies) if (o.hp / o.maxhp < t.hp / t.maxhp) t = o;
         op.cd = op.def.interval;
         op.fire = 0.2;
-        t.hp = Math.min(t.maxhp, t.hp + op.def.atk);
-        this.push({ type: 'heal', at: { r: t.r, c: t.c }, life: 0.4, max: 0.4, color: op.def.color });
+        // 治疗弹道：飞向友军，命中时回血
+        this.spawnProjectile(op, t, op.def.atk, op.def.magic, true);
         continue;
       }
 
@@ -312,24 +333,72 @@ export class GameEngine {
       op.fire = 0.2;
 
       if (op.def.aoe) {
+        // 群法：范围瞬发
         for (const e of inRange) this.damage(e, op.def.atk, op.def.magic);
         let sr = 0, sc = 0;
         for (const c of op.cells) { sr += c.r; sc += c.c; }
         this.push({ type: 'aoe', at: { r: sr / op.cells.length, c: sc / op.cells.length }, life: 0.32, max: 0.32, color: op.def.color });
       } else {
+        // 优先攻击自身阻挡的敌人，否则最靠前者
         let cand = inRange.filter((e) => e.blockedBy === op);
         if (cand.length === 0) cand = inRange;
         let target = cand[0];
         for (const e of cand) if (e.pathPos > target.pathPos) target = e;
-        this.damage(target, op.def.atk, op.def.magic);
-        const to = this.enemyRC(target);
         if (op.melee) {
+          // 近战：瞬发挥砍
+          this.damage(target, op.def.atk, op.def.magic);
+          const to = this.enemyRC(target);
           this.push({ type: 'slash', at: to, ang: Math.atan2(to.r - op.r, to.c - op.c), life: 0.2, max: 0.2, color: op.def.color });
         } else {
-          this.push({ type: 'shot', from: { r: op.r, c: op.c }, to, life: 0.16, max: 0.16, color: op.def.color });
+          // 远程（射手/单法）：发射弹道，命中时结算
+          this.spawnProjectile(op, target, op.def.atk, op.def.magic, false);
         }
       }
     }
+  }
+
+  private spawnProjectile(op: Operator, target: Enemy | Operator, amount: number, magic: boolean, heal: boolean): void {
+    const to = heal
+      ? { r: (target as Operator).r, c: (target as Operator).c }
+      : this.enemyRC(target as Enemy);
+    this.projectiles.push({
+      x: op.c, y: op.r, target, tx: to.c, ty: to.r,
+      speed: PROJECTILE_SPEED, color: op.def.color, amount, magic, heal, dead: false,
+    });
+  }
+
+  private advanceProjectiles(dt: number): void {
+    for (const p of this.projectiles) {
+      if (p.dead) continue;
+      // 更新目标当前位置（始终面向目标）
+      if (p.target && !(p.target as Enemy).dead) {
+        const t = p.target;
+        const to = p.heal ? { r: (t as Operator).r, c: (t as Operator).c } : this.enemyRC(t as Enemy);
+        p.tx = to.c; p.ty = to.r;
+      }
+      const dx = p.tx - p.x, dy = p.ty - p.y;
+      const dist = Math.hypot(dx, dy);
+      const step = p.speed * dt;
+      if (dist <= step || dist < 1e-4) {
+        // 命中
+        p.dead = true;
+        const t = p.target;
+        if (t && !(t as Enemy).dead) {
+          if (p.heal) {
+            const o = t as Operator;
+            o.hp = Math.min(o.maxhp, o.hp + p.amount);
+            this.push({ type: 'hit', at: { r: o.r, c: o.c }, life: 0.3, max: 0.3, color: p.color, heal: true });
+          } else {
+            this.damage(t as Enemy, p.amount, p.magic);
+            this.push({ type: 'hit', at: { r: p.ty, c: p.tx }, life: 0.25, max: 0.25, color: p.color, heal: false });
+          }
+        }
+      } else {
+        p.x += (dx / dist) * step;
+        p.y += (dy / dist) * step;
+      }
+    }
+    this.projectiles = this.projectiles.filter((p) => !p.dead);
   }
 
   private push(ef: Effect): void { this.effects.push(ef); }
@@ -382,6 +451,7 @@ export class GameEngine {
       hasNextLevel: this.hasNextLevel(),
       stars: this.stars(),
       leaked: this.leaked,
+      bulletTime: this.bulletTime,
     };
   }
 }

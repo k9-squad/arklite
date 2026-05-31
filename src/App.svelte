@@ -8,7 +8,7 @@
 
   import Hud from './components/Hud.svelte';
   import Dock from './components/Dock.svelte';
-  import CardInfoModal from './components/CardInfoModal.svelte';
+  import CardDetailBar from './components/CardDetailBar.svelte';
   import OpInfoPanel from './components/OpInfoPanel.svelte';
   import StartOverlay from './components/StartOverlay.svelte';
   import type { SelInfo } from './ui-types';
@@ -75,7 +75,7 @@
   }
 
   function onPointerUp(): void {
-    if (dragging && engine.pending) { engine.commitPending(); syncUi(); }
+    if (dragging && engine.pending) { engine.commitPending(); cardKind = null; syncUi(); }
     dragging = false;
   }
 
@@ -85,9 +85,14 @@
   const next = () => { engine.nextLevel(); cardKind = null; resize(); syncUi(); };
   const pause = () => { engine.togglePause(); syncUi(); };
   const speed = () => { engine.cycleSpeed(); syncUi(); };
-  const openCard = (k: OpKind) => { cardKind = k; };
-  const closeCard = () => { cardKind = null; };
-  const deploy = () => { if (cardKind) { engine.setPlacing(cardKind); cardKind = null; syncUi(); } };
+  const openCard = (k: OpKind) => { engine.cancelPlacing(); cardKind = k; engine.deselect(); syncUi(); };
+  const deploy = () => { if (cardKind) { engine.setPlacing(cardKind); syncUi(); } };
+  // 取消：若正在选位则退出选位（卡片仍开）；否则关闭卡片
+  const cancelCard = () => {
+    if (engine.placing) { engine.cancelPlacing(); }
+    else { cardKind = null; }
+    syncUi();
+  };
   const retreat = () => { engine.retreatSelected(); syncUi(); };
   const deselect = () => { engine.deselect(); syncUi(); };
 
@@ -140,13 +145,6 @@
       <OpInfoPanel info={selInfo} onRetreat={retreat} onClose={deselect} />
     {/if}
 
-    {#if cardKind}
-      <CardInfoModal
-        def={OPS[cardKind]} canAfford={canAffordCard} started={ui.started}
-        onClose={closeCard} onDeploy={deploy}
-      />
-    {/if}
-
     {#if !ui.started || ui.over}
       <StartOverlay
         started={ui.started} over={ui.over} won={ui.won}
@@ -159,5 +157,13 @@
     {/if}
   </div>
 
-  <Dock affordable={(k) => engine.affordable(k)} placingKind={ui.placingKind} onCard={openCard} />
+  {#if cardKind}
+    <CardDetailBar
+      def={OPS[cardKind]} canAfford={canAffordCard} started={ui.started}
+      placing={ui.placingKind === cardKind}
+      onDeploy={deploy} onCancel={cancelCard}
+    />
+  {/if}
+
+  <Dock affordable={(k) => engine.affordable(k)} placingKind={ui.placingKind} openKind={cardKind} onCard={openCard} />
 </div>

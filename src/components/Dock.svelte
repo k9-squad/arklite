@@ -3,10 +3,11 @@
   import { OPS, OP_ORDER } from '../game/operators';
 
   let {
-    affordable, placingKind, onCard,
+    affordable, placingKind, openKind, onCard,
   }: {
     affordable: (k: OpKind) => boolean;
     placingKind: OpKind | null;
+    openKind: OpKind | null;
     onCard: (k: OpKind) => void;
   } = $props();
 
@@ -18,7 +19,7 @@
     <div
       class="op"
       class:dis={!affordable(o.kind)}
-      class:sel={placingKind === o.kind}
+      class:sel={placingKind === o.kind || openKind === o.kind}
       data-k={o.kind}
       role="button"
       tabindex="0"

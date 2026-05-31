@@ -9,21 +9,23 @@ function rect(fwds: number[], sides: number[]): Array<[number, number]> {
 }
 
 // 所有范围均包含干员自身格 (0,0)。
+const RANGE_3x3_PLUS = rect([0, 1, 2], [-1, 0, 1]).concat([[3, 0]] as Array<[number, number]>); // 3×3 + 最前1格
 export const RANGES: Record<OpKind, Array<[number, number]>> = {
   guard: [[0, 0], [1, 0]],                 // 1×2（含自身）
   def: [[0, 0]],                           // 1×1（仅自身）
   sniper: rect([0, 1, 2, 3], [-1, 0, 1]),  // 3×4（含自身列）
   caster: rect([-1, 0, 1], [-1, 0, 1]),    // 3×3（含自身格）群攻
-  medic: rect([0, 1, 2], [-1, 0, 1]).concat([[3, 0]] as Array<[number, number]>), // 3×3 + 最前1格
+  mage: RANGE_3x3_PLUS,                     // 3×3 + 最前1格（OOO / XOOO / OOO）
+  medic: RANGE_3x3_PLUS,                    // 同上
 };
 
 export const OPS: Record<OpKind, OpDef> = {
   guard: {
     kind: 'guard', name: '近卫', cn: '卫', color: '#e8913c',
-    melee: true, block: 1, cost: 17, atk: 60, interval: 0.9, hp: 600,
+    melee: true, block: 2, cost: 17, atk: 60, interval: 0.9, hp: 600,
     aoe: false, support: false, magic: false, range: RANGES.guard,
-    sub: '阻挡1 · 1×2', roleTxt: '物理 · 近战单体', tier: '高攻 · 中攻速 · 中血',
-    blockTxt: '可阻挡 1 个敌人，优先攻击被自己阻挡的敌人。',
+    sub: '阻挡2 · 1×2', roleTxt: '物理 · 近战单体', tier: '高攻 · 中攻速 · 中血',
+    blockTxt: '可阻挡 2 个敌人，优先攻击被自己阻挡的敌人。',
     atkTxt: '物理伤害，攻击范围 1×2（含自身），单体高伤。',
   },
   def: {
@@ -50,6 +52,14 @@ export const OPS: Record<OpKind, OpDef> = {
     blockTxt: '部署于高台，不阻挡敌人。',
     atkTxt: '魔法伤害（无视护甲），同时攻击范围内（3×3）所有敌人。',
   },
+  mage: {
+    kind: 'mage', name: '单法', cn: '法', color: '#7b6cff',
+    melee: false, block: 0, cost: 22, atk: 52, interval: 1.2, hp: 270,
+    aoe: false, support: false, magic: true, range: RANGES.mage,
+    sub: '单体法术 · 3×3+', roleTxt: '魔法 · 远程单体', tier: '中攻 · 中偏低攻速 · 低血',
+    blockTxt: '部署于高台，不阻挡敌人。',
+    atkTxt: '魔法伤害（无视护甲），单体攻击范围内最靠前的敌人。',
+  },
   medic: {
     kind: 'medic', name: '医疗', cn: '医', color: '#34d399',
     melee: false, block: 0, cost: 14, atk: 60, interval: 1.0, hp: 600,
@@ -60,4 +70,4 @@ export const OPS: Record<OpKind, OpDef> = {
   },
 };
 
-export const OP_ORDER: OpKind[] = ['guard', 'def', 'sniper', 'caster', 'medic'];
+export const OP_ORDER: OpKind[] = ['guard', 'def', 'sniper', 'caster', 'mage', 'medic'];

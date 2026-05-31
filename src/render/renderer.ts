@@ -1,6 +1,6 @@
 // 画布渲染器：把引擎状态画到 canvas。唯一掌握「格↔像素」映射的地方。
 import type { GameEngine } from '../game/engine';
-import type { Effect, Enemy, Facing, Level, Operator, OpKind, Vec } from '../game/types';
+import type { Effect, Enemy, Facing, Level, Operator, OpKind, Projectile, Vec } from '../game/types';
 import { cellsFor, clamp, pathPosToRC } from '../game/geometry';
 import { OPS } from '../game/operators';
 
@@ -76,7 +76,41 @@ export class CanvasRenderer {
 
     for (const op of g.ops) this.drawOp(op);
     for (const e of g.enemies) this.drawEnemy(e);
+    for (const p of g.projectiles) this.drawProjectile(p);
     for (const ef of g.effects) this.drawEffect(ef);
+  }
+
+  private drawProjectile(p: Projectile): void {
+    const ctx = this.ctx, CELL = this.CELL;
+    const x = this.cx(p.x), y = this.cy(p.y);
+    const ang = Math.atan2(p.ty - p.y, p.tx - p.x); // 始终面向目标
+    const len = CELL * 0.26, wid = CELL * 0.1;
+    // 拖尾
+    ctx.globalAlpha = 0.5;
+    ctx.strokeStyle = p.color; ctx.lineWidth = wid; ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(x - Math.cos(ang) * len, y - Math.sin(ang) * len);
+    ctx.lineTo(x, y);
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+    // 弹头
+    ctx.save();
+    ctx.translate(x, y); ctx.rotate(ang);
+    ctx.shadowColor = p.color; ctx.shadowBlur = 8;
+    ctx.fillStyle = p.heal ? p.color : '#ffffff';
+    if (p.heal) {
+      ctx.beginPath(); ctx.arc(0, 0, wid * 0.9, 0, TAU); ctx.fill();
+    } else {
+      // 菱形弹头
+      ctx.beginPath();
+      ctx.moveTo(len * 0.5, 0); ctx.lineTo(0, wid * 0.8);
+      ctx.lineTo(-len * 0.3, 0); ctx.lineTo(0, -wid * 0.8); ctx.closePath();
+      ctx.fill();
+      ctx.fillStyle = p.color;
+      ctx.beginPath(); ctx.arc(0, 0, wid * 0.5, 0, TAU); ctx.fill();
+    }
+    ctx.shadowBlur = 0;
+    ctx.restore();
   }
 
   private paintBackdrop(): void {
@@ -235,6 +269,14 @@ export class CanvasRenderer {
       ctx.moveTo(x, y - s); ctx.lineTo(x + s, y + s); ctx.lineTo(x - s, y + s); ctx.closePath();
     } else if (kind === 'caster') {
       ctx.moveTo(x, y - s); ctx.lineTo(x + s, y); ctx.lineTo(x, y + s); ctx.lineTo(x - s, y); ctx.closePath();
+    } else if (kind === 'mage') {
+      // 六边形
+      for (let i = 0; i < 6; i++) {
+        const a = (i / 6) * TAU - Math.PI / 2;
+        const vx = x + Math.cos(a) * s, vy = y + Math.sin(a) * s;
+        if (i) ctx.lineTo(vx, vy); else ctx.moveTo(vx, vy);
+      }
+      ctx.closePath();
     } else if (kind === 'medic') {
       ctx.arc(x, y, s, 0, TAU);
     } else {
@@ -246,7 +288,13 @@ export class CanvasRenderer {
 
   private drawOp(op: Operator): void {
     const ctx = this.ctx, CELL = this.CELL;
-    const x = this.cx(op.c), y = this.cy(op.r);
+    // 阻挡中的干员略微朝来敌方向偏离格心，给被挡敌人腾出空间
+    let ox = 0, oy = 0;
+    if (op.block > 0 && op.blk.length > 0) {
+      ox = -op.facing.dc * CELL * 0.12;
+      oy = -op.facing.dr * CELL * 0.12;
+    }
+    const x = this.cx(op.c) + ox, y = this.cy(op.r) + oy;
     const fireT = clamp(op.fire / 0.2, 0, 1);
     const s = CELL * 0.34 * (1 + 0.06 * fireT);
 
@@ -274,20 +322,34 @@ export class CanvasRenderer {
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     ctx.fillText(op.def.cn, x, y + 1);
 
-    // 血条（受伤才显示）
-    if (op.hp < op.maxhp) {
+    // 血条（受伤才显示，平滑缓动 + 残影）
+    if (op.hp < op.maxhp - 0.5 || op.hpShown < op.maxhp - 0.5) {
       const w = CELL * 0.72, bx = x - w / 2, by = y - s - 8;
-      ctx.fillStyle = 'rgba(0,0,0,.6)'; this.roundRect(bx - 1, by - 1, w + 2, 6, 3); ctx.fill();
       const ratio = clamp(op.hp / op.maxhp, 0, 1);
+      const shown = clamp(op.hpShown / op.maxhp, 0, 1);
+      ctx.fillStyle = 'rgba(0,0,0,.6)'; this.roundRect(bx - 1, by - 1, w + 2, 6, 3); ctx.fill();
+      if (shown > ratio) { // 掉血残影
+        ctx.fillStyle = 'rgba(255,120,120,.55)'; this.roundRect(bx, by, w * shown, 4, 2); ctx.fill();
+      } else if (shown < ratio) { // 回血残影（医疗）
+        ctx.fillStyle = 'rgba(180,255,200,.5)'; this.roundRect(bx, by, w * ratio, 4, 2); ctx.fill();
+      }
       ctx.fillStyle = ratio > 0.5 ? '#5fd16a' : ratio > 0.25 ? '#e6c34a' : '#e0564a';
-      this.roundRect(bx, by, w * ratio, 4, 2); ctx.fill();
+      this.roundRect(bx, by, w * Math.min(ratio, shown), 4, 2); ctx.fill();
     }
   }
 
   private drawEnemy(e: Enemy): void {
     const ctx = this.ctx, CELL = this.CELL;
     const rc = pathPosToRC(e.path, e.pathPos);
-    const px = this.cx(rc.c), py = this.cy(rc.r);
+    let ox = 0, oy = 0;
+    // 被阻挡的敌人：按槽位错开，避免叠在一起
+    if (e.blockedBy && e.blockTotal > 1) {
+      const ang = (e.blockSlot / e.blockTotal) * TAU - Math.PI / 2;
+      const spread = CELL * 0.20;
+      ox = Math.cos(ang) * spread;
+      oy = Math.sin(ang) * spread;
+    }
+    const px = this.cx(rc.c) + ox, py = this.cy(rc.r) + oy;
     const spawnT = clamp(e.age / 0.3, 0, 1); // 出场缩放
     const rad = CELL * e.def.rad * (0.4 + 0.6 * spawnT);
 
@@ -310,23 +372,49 @@ export class CanvasRenderer {
       ctx.beginPath(); ctx.arc(px, py, rad + 3, 0, TAU); ctx.stroke();
     }
 
-    // 血条
+    // 血条（平滑缓动 + 残影）
     const w = rad * 2.3, bx = px - w / 2, by = py - rad - 8;
+    const real = clamp(e.hp / e.maxhp, 0, 1);
+    const shown = clamp(e.hpShown / e.maxhp, 0, 1);
     ctx.fillStyle = 'rgba(0,0,0,.6)'; this.roundRect(bx - 1, by - 1, w + 2, 6, 3); ctx.fill();
-    ctx.fillStyle = '#ff5a5a'; this.roundRect(bx, by, w * clamp(e.hp / e.maxhp, 0, 1), 4, 2); ctx.fill();
+    if (shown > real) { // 掉血残影（白）
+      ctx.fillStyle = 'rgba(255,255,255,.6)'; this.roundRect(bx, by, w * shown, 4, 2); ctx.fill();
+    }
+    ctx.fillStyle = '#ff5a5a'; this.roundRect(bx, by, w * real, 4, 2); ctx.fill();
   }
 
   private drawEffect(ef: Effect): void {
     const ctx = this.ctx, CELL = this.CELL;
     const k = clamp(ef.life / ef.max, 0, 1); // 1→0
-    if (ef.type === 'shot') {
-      const fx = this.cx(ef.from.c), fy = this.cy(ef.from.r);
-      const tx = this.cx(ef.to.c), ty = this.cy(ef.to.r);
-      ctx.globalAlpha = k;
-      ctx.strokeStyle = ef.color; ctx.lineWidth = 3.5; ctx.lineCap = 'round';
-      ctx.shadowColor = ef.color; ctx.shadowBlur = 8;
-      ctx.beginPath(); ctx.moveTo(fx, fy); ctx.lineTo(tx, ty); ctx.stroke();
-      ctx.shadowBlur = 0; ctx.lineCap = 'butt'; ctx.globalAlpha = 1;
+    if (ef.type === 'hit') {
+      const x = this.cx(ef.at.c), y = this.cy(ef.at.r);
+      const prog = 1 - k;
+      if (ef.heal) {
+        // 治疗命中：上浮十字 + 光环
+        ctx.globalAlpha = k;
+        ctx.strokeStyle = ef.color; ctx.lineWidth = 3;
+        ctx.beginPath(); ctx.arc(x, y, CELL * 0.4 * (0.6 + prog), 0, TAU); ctx.stroke();
+        const ly = y - CELL * 0.3 * prog, cs = CELL * 0.1;
+        ctx.fillStyle = ef.color;
+        ctx.fillRect(x - cs / 3, ly - cs, cs * 0.66, cs * 2);
+        ctx.fillRect(x - cs, ly - cs / 3, cs * 2, cs * 0.66);
+        ctx.globalAlpha = 1;
+      } else {
+        // 命中爆点：闪光 + 放射火花
+        ctx.globalAlpha = k;
+        ctx.fillStyle = '#ffffff';
+        ctx.beginPath(); ctx.arc(x, y, CELL * 0.16 * (1 - prog * 0.5), 0, TAU); ctx.fill();
+        ctx.strokeStyle = ef.color; ctx.lineWidth = 2.5; ctx.lineCap = 'round';
+        const spokes = 6, len = CELL * (0.18 + prog * 0.22);
+        for (let i = 0; i < spokes; i++) {
+          const a = (i / spokes) * TAU + prog;
+          ctx.beginPath();
+          ctx.moveTo(x + Math.cos(a) * len * 0.4, y + Math.sin(a) * len * 0.4);
+          ctx.lineTo(x + Math.cos(a) * len, y + Math.sin(a) * len);
+          ctx.stroke();
+        }
+        ctx.lineCap = 'butt'; ctx.globalAlpha = 1;
+      }
     } else if (ef.type === 'aoe') {
       const x = this.cx(ef.at.c), y = this.cy(ef.at.r);
       const rr = CELL * (0.5 + (1 - k) * 1.1);

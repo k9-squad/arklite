@@ -1,7 +1,7 @@
 :root{
   --bg:#0e0e15; --panel:#1b1b27; --panel2:#262633; --line:#34344a;
   --txt:#ececf4; --dim:#9696ae;
-  --guard:#e8913c; --def:#3c7be8; --sniper:#3ce86a; --caster:#b04ce8; --medic:#34d399;
+  --guard:#e8913c; --def:#3c7be8; --sniper:#3ce86a; --caster:#b04ce8; --mage:#7b6cff; --medic:#34d399;
   --accent:#ffd54a;
 }
 *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
@@ -63,6 +63,7 @@ canvas{border-radius:12px;touch-action:none;display:block;
 .op[data-k=def]{border-color:var(--def);}
 .op[data-k=sniper]{border-color:var(--sniper);}
 .op[data-k=caster]{border-color:var(--caster);}
+.op[data-k=mage]{border-color:var(--mage);}
 .op[data-k=medic]{border-color:var(--medic);}
 .op.sel{box-shadow:0 0 0 2px #fff inset, 0 0 14px rgba(255,255,255,.3);}
 .op.dis{opacity:.4;filter:grayscale(.6);}
@@ -82,25 +83,30 @@ canvas{border-radius:12px;touch-action:none;display:block;
 .oiStats span b{color:#fff;}
 .xbtn{background:none;border:none;color:var(--dim);font-size:22px;cursor:pointer;line-height:1;padding:0 4px;}
 
-/* 干员详情弹窗 */
-#cardInfo{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
-  background:rgba(8,8,14,.82);z-index:12;padding:18px;backdrop-filter:blur(4px);}
-.modal{background:linear-gradient(180deg,#22222f,#1a1a25);
-  border:1px solid var(--line);border-radius:18px;
-  padding:18px;width:100%;max-width:330px;box-shadow:0 14px 40px rgba(0,0,0,.6);}
-.modalHead{display:flex;align-items:center;margin-bottom:8px;}
-.ciName{font-weight:800;font-size:20px;flex:1;}
-.tags{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px;}
-.tag{font-size:11px;padding:3px 9px;border-radius:20px;background:var(--panel2);
-  border:1px solid var(--line);color:var(--dim);}
-.rangeGrid{display:grid;gap:3px;justify-content:center;margin:6px auto 14px;width:fit-content;}
-.rgc{width:18px;height:18px;border-radius:4px;background:#23232f;}
+/* 干员详情条（在部署栏上方，不遮挡屏幕） */
+#cardBar{display:flex;align-items:center;gap:10px;flex:none;
+  padding:9px 12px;background:linear-gradient(180deg,#20202e,#191923);
+  border-top:1px solid var(--line);box-shadow:0 -2px 10px rgba(0,0,0,.3);}
+.cbGrid{flex:none;}
+.cbBody{flex:1;min-width:0;}
+.cbHead{display:flex;align-items:baseline;gap:8px;}
+.cbName{font-weight:800;font-size:15px;}
+.cbType{font-size:10px;color:var(--dim);}
+.cbStats{display:flex;flex-wrap:wrap;gap:3px 10px;margin:3px 0;}
+.cbStats span{font-size:11px;color:var(--dim);}
+.cbStats span b{color:#fff;margin-left:3px;}
+.cbDesc{font-size:10.5px;color:var(--dim);line-height:1.4;
+  overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;}
+.cbActions{flex:none;display:flex;flex-direction:column;gap:6px;align-items:stretch;}
+.cbBtn{padding:8px 16px;font-size:13px;white-space:nowrap;}
+.cbBtn.deploy{background:linear-gradient(180deg,#3a6df0,#2f55c8);border-color:#5b86ff;}
+.cbHint{font-size:10px;color:var(--accent);text-align:center;}
+/* 范围网格（卡片条与开始页通用） */
+.rangeGrid{display:grid;gap:2px;justify-content:center;width:fit-content;}
+.rgc{width:13px;height:13px;border-radius:3px;background:#23232f;}
 .rgc.cov{background:rgba(120,255,150,.5);}
 .rgc.heal{background:rgba(80,230,170,.55);}
 .rgc.self{background:#fff;box-shadow:0 0 0 2px var(--accent);}
-.ciDesc{font-size:12.5px;color:var(--dim);line-height:1.6;margin:4px 0 16px;}
-.ciDesc b{color:var(--txt);}
-.ciDeploy{width:100%;font-size:15px;padding:12px;}
 
 /* 开始 / 结算覆盖层 */
 #overlay{position:absolute;inset:0;display:flex;flex-direction:column;
